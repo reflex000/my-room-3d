@@ -1,3 +1,4 @@
+import { createAvatar } from './avatar.js';
 const stage = document.querySelector('three-d-stage');
 const { THREE: T } = await stage.ready;
 
@@ -553,6 +554,12 @@ chair.position.set(0.5, 0, -0.28);
 chair.rotation.y = -0.35;
 room.add(chair);
 
+/* ============ avatar sitting on the chair (avatar.js) ============ */
+const avatar = createAvatar({ T, stage, rbox, cyl, add });
+avatar.group.position.copy(chair.position); avatar.group.rotation.y = chair.rotation.y;
+room.add(avatar.group);
+window.__avatar = avatar;
+
 /* ============ loft bed (white tube frame, grey fabric guard) ============ */
 const bed = new T.Group(); bed.name = 'loft_bed';
 const BW = 0.95, BL = 2.0, BH = 1.45, GH = 0.5;
@@ -664,6 +671,7 @@ const LINKS = [
   { test: n => n.startsWith('monitor_main') || n === 'screen_main', label: 'LG 32" Smart Monitor — view product', url: 'https://www.lg.com/ca_en/monitors/smart-monitors/32u720sa-w/' },
   { test: n => n.startsWith('laptop_hp'), label: 'HP Elite x360 1040 G11 — view product', url: 'https://www.hp.com/us-en/shop/pdp/hp-elite-x360-1040-14-inch-g11-2-in-1-notebook-pc-wolf-pro-security-edition-p-cp3m0ua-aba-1' },
   { test: n => n.startsWith('loft_bed') || n.startsWith('bed_') || n.startsWith('ladder_'), label: 'IKEA VITVAL Loft Bed — view product', url: 'https://www.ikea.com/ca/en/p/vitval-loft-bed-frame-white-light-gray-70411239/' },
+  { test: n => n.startsWith('avatar'), label: "That's me 👋 — click to say hi", action: () => avatar.command('hi') },
   { test: n => n.startsWith('curtain'), label: 'Click to open / close the curtains', action: () => window.__toggleCurtains() },
 ];
 const tip = document.createElement('div');
@@ -714,6 +722,7 @@ stage.addEventListener('pointerup', (ev) => {
 const t0 = performance.now();
 (function tick(now) {
   const t = ((now || t0) - t0) / 1000;
+  avatar.update();
   for (const s of screens) {
     if (!s.live) continue;
     s.draw(s.ctx, s.w, s.h, t);
@@ -746,7 +755,7 @@ try {
   new GLTFLoader().load('./room.glb', (gltf) => {
     const baked = gltf.scene; baked.name = 'room_baked';
     const liveMats = { screen_main: matUltra, screen_side: matSide, screen_laptop: matLap1, laptop_hp_screen: matLap2 };
-    const keepFromPrimitive = ['city_view', 'window_backing', 'window_glass', 'curtain_left', 'curtain_right', 'curtain_rod', 'curtain_finial_1', 'curtain_finial_2', 'led_strip_desk', 'led_strip_bed'];
+    const keepFromPrimitive = ['city_view', 'window_backing', 'window_glass', 'curtain_left', 'curtain_right', 'curtain_rod', 'curtain_finial_1', 'curtain_finial_2', 'led_strip_desk', 'led_strip_bed', 'avatar'];
     baked.traverse((o) => {
       if (!o.isMesh) return;
       if (liveMats[o.name]) { o.material = liveMats[o.name]; o.material.side = T.FrontSide; o.material.toneMapped = false; return; }
