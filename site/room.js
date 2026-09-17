@@ -555,8 +555,7 @@ chair.rotation.y = -0.35;
 room.add(chair);
 
 /* ============ avatar sitting on the chair (avatar.js) ============ */
-const avatar = createAvatar({ T, stage, rbox, cyl, add });
-avatar.group.position.copy(chair.position); avatar.group.rotation.y = chair.rotation.y;
+const avatar = createAvatar({ T, stage, seat: { x: chair.position.x, z: chair.position.z, rotY: chair.rotation.y } });
 room.add(avatar.group);
 window.__avatar = avatar;
 
