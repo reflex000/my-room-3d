@@ -678,6 +678,11 @@ function pick(ev) {
   for (const h of hits) {
     if (h.object.name === 'city_view' || h.object.name === 'window_glass') continue;
     let o = h.object;
+    /* baked glb merges the HP body into room_props — treat hits near its screen as the laptop */
+    if (o.name === 'room_props') {
+      const scr = stage._scene.getObjectByName('laptop_hp_screen');
+      if (scr && h.point.distanceTo(new T.Box3().setFromObject(scr).getCenter(new T.Vector3())) < 0.3) return LINKS.find(L => L.test('laptop_hp'));
+    }
     while (o) { const l = LINKS.find(L => L.test(o.name || '')); if (l) return l; o = o.parent; }
     return null;
   }
