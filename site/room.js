@@ -663,6 +663,7 @@ stage._controls.autoRotateSpeed = 0.7;
 const LINKS = [
   { test: n => n.startsWith('monitor_main') || n === 'screen_main', label: 'LG 32" Smart Monitor — view product', url: 'https://www.lg.com/ca_en/monitors/smart-monitors/32u720sa-w/' },
   { test: n => n.startsWith('laptop_hp'), label: 'HP Elite x360 1040 G11 — view product', url: 'https://www.hp.com/us-en/shop/pdp/hp-elite-x360-1040-14-inch-g11-2-in-1-notebook-pc-wolf-pro-security-edition-p-cp3m0ua-aba-1' },
+  { test: n => n.startsWith('loft_bed') || n.startsWith('bed_') || n.startsWith('ladder_'), label: 'IKEA VITVAL Loft Bed — view product', url: 'https://www.ikea.com/ca/en/p/vitval-loft-bed-frame-white-light-gray-70411239/' },
   { test: n => n.startsWith('curtain'), label: 'Click to open / close the curtains', action: () => window.__toggleCurtains() },
 ];
 const tip = document.createElement('div');
@@ -682,6 +683,13 @@ function pick(ev) {
     if (o.name === 'room_props') {
       const scr = stage._scene.getObjectByName('laptop_hp_screen');
       if (scr && h.point.distanceTo(new T.Box3().setFromObject(scr).getCenter(new T.Vector3())) < 0.3) return LINKS.find(L => L.test('laptop_hp'));
+    }
+    /* same for the loft bed: hit inside the bed frame (or its ladder) volume, in room coords */
+    if (o.name === 'room_props') {
+      const q = o.parent.worldToLocal(h.point.clone());
+      const inBed = q.x > -1.75 && q.x < -0.72 && q.z > -1.14 && q.z < 0.94;
+      const inLadder = q.x >= -0.72 && q.x < -0.33 && q.z > 0.1 && q.z < 0.6;
+      if (q.y > 0.03 && q.y < 2.05 && (inBed || inLadder)) return LINKS.find(L => L.test('loft_bed'));
     }
     while (o) { const l = LINKS.find(L => L.test(o.name || '')); if (l) return l; o = o.parent; }
     return null;
