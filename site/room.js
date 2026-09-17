@@ -152,12 +152,91 @@ box('baseboard_back', HW * 2, 0.12, 0.022, M.trim, 0, 0.06, -HW + TH + 0.012);
 box('baseboard_left', 0.022, 0.12, HW * 2, M.trim, -HW + TH + 0.012, 0.06, 0);
 box('baseboard_right', 0.022, 0.12, HW * 2, M.trim, HW - TH - 0.012, 0.06, 0);
 
-/* window wall (right) with vertical blinds */
+/* ============ window: frame, curtains, New West view outside ============ */
 const wx = HW - TH - 0.01;
-const blinds = add('window_blinds', new T.Mesh(new T.PlaneGeometry(2.5, 1.75), M.blind), wx, 1.42, 0.2);
-blinds.rotation.y = -Math.PI / 2; blinds.castShadow = false; M.blind.transparent = true; M.blind.opacity = 0.45; M.blind.side = T.DoubleSide;
-box('blind_rail', 0.07, 0.05, 2.58, M.trim, wx - 0.02, 2.32, 0.2);
-box('window_sill', 0.1, 0.04, 2.54, M.trim, wx - 0.04, 0.54, 0.2);
+const WZ = 0.2, WW = 2.5, WH = 1.75, WY = 1.42;
+box('window_frame_top', 0.08, 0.06, WW + 0.12, M.black, wx - 0.02, WY + WH / 2 + 0.03, WZ);
+box('window_frame_bottom', 0.08, 0.06, WW + 0.12, M.black, wx - 0.02, WY - WH / 2 - 0.03, WZ);
+box('window_frame_left', 0.08, WH + 0.12, 0.06, M.black, wx - 0.02, WY, WZ - WW / 2 - 0.03);
+box('window_frame_right', 0.08, WH + 0.12, 0.06, M.black, wx - 0.02, WY, WZ + WW / 2 + 0.03);
+box('window_mullion', 0.06, WH, 0.05, M.black, wx - 0.02, WY, WZ);
+box('window_sill', 0.14, 0.04, WW + 0.2, M.trim, wx - 0.05, WY - WH / 2 - 0.08, WZ);
+const glassMat = new T.MeshStandardMaterial({ name: 'glass', color: 0xdfeaf2, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.12, side: T.DoubleSide });
+add('window_glass', new T.Mesh(new T.PlaneGeometry(WW, WH), glassMat), wx, WY, WZ).rotation.y = -Math.PI / 2;
+
+/* painted city view (canvas) — animated train yard, SkyTrain, road */
+const VIEW_W = 1400, VIEW_H = 800;
+const viewC = cvs(VIEW_W, VIEW_H), vctx = viewC.getContext('2d');
+const viewTex = new T.CanvasTexture(viewC); viewTex.colorSpace = T.SRGBColorSpace; viewTex.anisotropy = 8;
+const bldgs = []; { let x = 0; let k = 0; while (x < VIEW_W) { const w = 40 + ((k * 37) % 70), h = 60 + ((k * 53) % 190); bldgs.push({ x, w, h, c: ['#c9c2b8', '#b8b1a8', '#d7cfc4', '#a89f95', '#e0d8cc'][k % 5], tower: (k % 6) === 2 }); x += w + 6 + (k % 3) * 6; k++; } }
+const cars = [{ x: 200, s: 62, c: '#f2f2f2' }, { x: 900, s: 48, c: '#2a2a2a' }, { x: 1300, s: 70, c: '#b53a2f' }];
+function drawView(ctx, t) {
+  const W = VIEW_W, H = VIEW_H;
+  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.5); sky.addColorStop(0, '#5f9bd6'); sky.addColorStop(1, '#cfe2f1');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+  /* mountains */
+  ctx.fillStyle = '#8ea3b8'; ctx.beginPath(); ctx.moveTo(0, H * 0.34);
+  for (let x = 0; x <= W; x += 60) ctx.lineTo(x, H * 0.34 - Math.abs(Math.sin(x * 0.011) * 70 + Math.sin(x * 0.027) * 30));
+  ctx.lineTo(W, H * 0.34); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#edf3f8'; for (let x = 0; x <= W; x += 60) { const y = H * 0.34 - Math.abs(Math.sin(x * 0.011) * 70 + Math.sin(x * 0.027) * 30); if (y < H * 0.27) { ctx.beginPath(); ctx.moveTo(x - 14, y + 14); ctx.lineTo(x, y); ctx.lineTo(x + 14, y + 14); ctx.fill(); } }
+  /* trees line + buildings */
+  ctx.fillStyle = '#4b6b45'; for (let x = 0; x < W; x += 34) { ctx.beginPath(); ctx.arc(x, H * 0.36, 22, 0, 7); ctx.fill(); }
+  bldgs.forEach(b => {
+    const top = H * 0.4 - b.h;
+    ctx.fillStyle = b.c; ctx.fillRect(b.x, top, b.w, b.h);
+    ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(b.x + b.w - 8, top, 8, b.h);
+    ctx.fillStyle = '#6f8faa';
+    for (let yy = top + 10; yy < H * 0.4 - 12; yy += 16) for (let xx = b.x + 6; xx < b.x + b.w - 8; xx += 14) ctx.fillRect(xx, yy, 7, 9);
+    if (b.tower) { ctx.fillStyle = '#b8483f'; ctx.fillRect(b.x, top - 6, b.w, 6); }
+  });
+  /* SkyTrain guideway + moving train */
+  ctx.fillStyle = '#bdb6ab'; ctx.fillRect(0, H * 0.42, W, 26);
+  ctx.fillStyle = '#a49d92'; for (let x = 60; x < W; x += 220) ctx.fillRect(x, H * 0.42 + 26, 18, 70);
+  const tx = ((t * 120) % (W + 500)) - 400;
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#e9ecef' : '#f4f6f8'; ctx.fillRect(tx + i * 96, H * 0.42 - 34, 90, 34); ctx.fillStyle = '#3b7dd8'; ctx.fillRect(tx + i * 96, H * 0.42 - 12, 90, 5); ctx.fillStyle = '#233'; for (let k = 0; k < 4; k++) ctx.fillRect(tx + i * 96 + 8 + k * 21, H * 0.42 - 28, 14, 11); }
+  /* warehouses */
+  ctx.fillStyle = '#e8d9d3'; ctx.fillRect(0, H * 0.5, W * 0.32, 60); ctx.fillStyle = '#d9d2c7'; ctx.fillRect(W * 0.6, H * 0.5, W * 0.3, 55);
+  ctx.fillStyle = '#c94a3d'; ctx.fillRect(W * 0.72, H * 0.5, 90, 14);
+  /* rail yard: ballast + tracks */
+  ctx.fillStyle = '#c8c1b3'; ctx.fillRect(0, H * 0.58, W, H * 0.24);
+  for (let r = 0; r < 4; r++) { const y = H * 0.62 + r * 40; ctx.fillStyle = '#7a6f62'; for (let x = 0; x < W; x += 18) ctx.fillRect(x, y - 3, 10, 12); ctx.fillStyle = '#4b4a48'; ctx.fillRect(0, y, W, 3); ctx.fillRect(0, y + 6, W, 3); }
+  /* boxcars crawling on two tracks */
+  const drawCars = (y, speed, offset, cols) => { const shift = ((t * speed + offset) % 260); for (let x = -260 + shift; x < W + 20; x += 260) { const c = cols[Math.floor((x + 3000) / 260) % cols.length]; ctx.fillStyle = c; ctx.fillRect(x, y - 52, 240, 54); ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x + 100, y - 46, 30, 42); ctx.fillStyle = '#e6e1d6'; ctx.fillRect(x + 20, y - 40, 60, 14); ctx.fillStyle = '#8fd0c6'; ctx.fillRect(x + 150, y - 24, 70, 14); ctx.fillStyle = '#222'; ctx.fillRect(x + 20, y, 24, 8); ctx.fillRect(x + 190, y, 24, 8); } };
+  drawCars(H * 0.62 - 2, 9, 0, ['#a63b31', '#8e3a2c', '#b8452f', '#c9862a']);
+  drawCars(H * 0.70 - 2, -6, 120, ['#a63b31', '#e2ddd3', '#a63b31', '#b8452f']);
+  /* fence, road, cars */
+  ctx.fillStyle = '#6a6c66'; ctx.fillRect(0, H * 0.84, W, 6);
+  ctx.fillStyle = '#5e5f5c'; ctx.fillRect(0, H * 0.87, W, H * 0.13);
+  ctx.fillStyle = '#e8c53a'; for (let x = 0; x < W; x += 80) ctx.fillRect(x, H * 0.93, 40, 4);
+  cars.forEach(c => { c.x = (c.x + c.s * 0.016 + W) % (W + 200) - 100; ctx.fillStyle = c.c; ctx.fillRect(c.x, H * 0.89, 78, 26); ctx.fillStyle = '#333'; ctx.fillRect(c.x + 14, H * 0.89 - 12, 46, 14); ctx.fillStyle = '#111'; ctx.fillRect(c.x + 8, H * 0.89 + 24, 14, 8); ctx.fillRect(c.x + 56, H * 0.89 + 24, 14, 8); });
+  /* street tree in front */
+  ctx.fillStyle = '#3c5a36'; ctx.beginPath(); ctx.arc(W * 0.78, H * 0.8, 70, 0, 7); ctx.fill(); ctx.fillStyle = '#4c6e44'; ctx.beginPath(); ctx.arc(W * 0.8, H * 0.74, 55, 0, 7); ctx.fill();
+}
+drawView(vctx, 0); viewTex.needsUpdate = true;
+const viewMat = new T.MeshBasicMaterial({ name: 'city_view', map: viewTex, toneMapped: false, transparent: true, opacity: 0 });
+const cityView = add('city_view', new T.Mesh(new T.PlaneGeometry(WW - 0.02, WH - 0.02), viewMat), wx + 0.05, WY, WZ);
+cityView.rotation.y = -Math.PI / 2; cityView.castShadow = false; cityView.receiveShadow = false; cityView.visible = false;
+/* backing so the view never shows from behind the wall */
+const backing = add('window_backing', new T.Mesh(new T.PlaneGeometry(WW + 0.2, WH + 0.2), new T.MeshBasicMaterial({ name: 'window_backing', color: 0x05070c, side: T.FrontSide })), wx + 0.08, WY, WZ);
+backing.rotation.y = -Math.PI / 2; backing.castShadow = false; backing.receiveShadow = false;
+const viewLight = new T.PointLight(0xfff3dc, 0, 5, 2); viewLight.position.set(wx + 0.6, WY, WZ);
+
+/* curtains: two grey panels on a black rod, click to open */
+const curtainMat = new T.MeshStandardMaterial({ name: 'curtain_grey', color: 0xb9bdc3, roughness: 1, side: T.DoubleSide, emissive: 0x3a3f4a, emissiveIntensity: 0.6 });
+function curtainPanel(name, z0) {
+  const g = new T.Group(); g.name = name; g.position.set(wx - 0.09, WY + WH / 2 + 0.05, z0);
+  const pleats = new T.Group(); pleats.name = name + '_pleats';
+  const N = 24, step = (WW / 2) / (N - 1);
+  for (let i = 0; i < N; i++) { const p = add(name + '_pleat_' + (i + 1), new T.Mesh(new T.CylinderGeometry(step * 0.62, step * 0.66, WH + 0.2, 10), curtainMat), (i % 2) * 0.025 - 0.012, -(WH + 0.2) / 2, 0, pleats); p.castShadow = false; p.userData.baseZ = i * step; p.position.z = p.userData.baseZ; }
+  g.add(pleats); room.add(g); return g;
+}
+const curtainL = curtainPanel('curtain_left', WZ - WW / 2);
+const curtainR = curtainPanel('curtain_right', WZ + WW / 2); curtainR.scale.z = -1;
+cyl('curtain_rod', 0.014, 0.014, WW + 0.3, M.black, wx - 0.09, WY + WH / 2 + 0.08, WZ, null, 12).rotation.x = Math.PI / 2;
+add('curtain_finial_1', new T.Mesh(new T.SphereGeometry(0.03, 12, 10), M.black), wx - 0.09, WY + WH / 2 + 0.08, WZ - WW / 2 - 0.15);
+add('curtain_finial_2', new T.Mesh(new T.SphereGeometry(0.03, 12, 10), M.black), wx - 0.09, WY + WH / 2 + 0.08, WZ + WW / 2 + 0.15);
+const curtain = { open: 0, target: 0 };
+window.__toggleCurtains = () => { curtain.target = curtain.target ? 0 : 1; };
 
 /* doorway on the back wall */
 box('door_casing_l', 0.05, 2.05, 0.06, M.trim, -0.78, 1.02, -HW + TH + 0.03);
@@ -198,37 +277,37 @@ function chrome(ctx, w, h, title, accent) {
   ctx.fillStyle = '#0a1620'; ctx.fillRect(0, 0, w, 32);
   ['#f0685b', '#f2c14e', '#63c76a'].forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(22 + i * 18, 16, 5, 0, 7); ctx.fill(); });
   ctx.fillStyle = ui.line; ctx.fillRect(90, 6, w - 130, 18);
-  ctx.fillStyle = ui.dim; ctx.font = '12px monospace'; ctx.fillText(title, 100, 19);
+  ctx.fillStyle = ui.dim; ctx.font = '16px monospace'; ctx.fillText(title, 100, 21);
   ctx.fillStyle = ui.panel; ctx.fillRect(0, 32, 74, h - 32);
   for (let i = 0; i < 6; i++) { ctx.fillStyle = i === 1 ? accent : ui.line; ctx.fillRect(16, 56 + i * 38, 42, 18); }
 }
 function drawBank(ctx, w, h, t) {
   chrome(ctx, w, h, 'accounts \u2014 overview', ui.accent);
   const x0 = 96;
-  ctx.fillStyle = ui.ink; ctx.font = '600 24px system-ui, sans-serif';
-  ctx.fillText('Member Accounts', x0, 72);
-  ctx.font = '12px system-ui, sans-serif'; ctx.fillStyle = ui.dim;
-  ctx.fillText('daily balance / 30 days', x0, 92);
+  ctx.fillStyle = ui.ink; ctx.font = '700 44px system-ui, sans-serif';
+  ctx.fillText('Member Accounts', x0, 84);
+  ctx.font = '22px system-ui, sans-serif'; ctx.fillStyle = ui.dim;
+  ctx.fillText('daily balance / 30 days', x0, 116);
   for (let i = 0; i < 3; i++) {
-    const cx = x0 + i * 180;
-    ctx.fillStyle = ui.panel; ctx.fillRect(cx, 106, 164, 74);
-    ctx.fillStyle = i === 0 ? ui.accent : ui.dim; ctx.font = '600 22px system-ui, sans-serif';
-    ctx.fillText('$' + ([48.2, 12.7, 6.4][i] + Math.sin(t * 1.1 + i) * 0.4).toFixed(1) + 'k', cx + 14, 146);
-    ctx.fillStyle = ui.dim; ctx.font = '12px system-ui, sans-serif';
-    ctx.fillText(['chequing', 'savings', 'credit'][i], cx + 14, 168);
+    const cx = x0 + i * 300;
+    ctx.fillStyle = ui.panel; ctx.fillRect(cx, 136, 280, 120);
+    ctx.fillStyle = i === 0 ? ui.accent : ui.ink; ctx.font = '700 46px system-ui, sans-serif';
+    ctx.fillText('$' + ([48.2, 12.7, 6.4][i] + Math.sin(t * 1.1 + i) * 0.4).toFixed(1) + 'k', cx + 20, 200);
+    ctx.fillStyle = ui.dim; ctx.font = '22px system-ui, sans-serif';
+    ctx.fillText(['chequing', 'savings', 'credit'][i], cx + 20, 238);
   }
-  const gx = x0, gy = 198, gw = w - x0 - 36, gh = h - gy - 28;
+  const gx = x0, gy = 280, gw = w - x0 - 36, gh = h - gy - 28;
   ctx.fillStyle = ui.panel; ctx.fillRect(gx, gy, gw, gh);
   ctx.strokeStyle = ui.line; ctx.lineWidth = 1;
   for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(gx, gy + gh / 4 * i); ctx.lineTo(gx + gw, gy + gh / 4 * i); ctx.stroke(); }
-  ctx.strokeStyle = ui.accent; ctx.lineWidth = 3; ctx.beginPath();
+  ctx.strokeStyle = ui.accent; ctx.lineWidth = 6; ctx.beginPath();
   for (let i = 0; i <= 70; i++) {
     const p = i / 70, x = gx + p * gw;
     const y = gy + gh * 0.74 - (Math.sin(p * 6 + t) * 0.16 + Math.sin(p * 13 - t * 0.7) * 0.07 + p * 0.34) * gh;
     i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
   }
   ctx.stroke();
-  ctx.strokeStyle = ui.accent2; ctx.lineWidth = 2; ctx.beginPath();
+  ctx.strokeStyle = ui.accent2; ctx.lineWidth = 4; ctx.beginPath();
   for (let i = 0; i <= 70; i++) {
     const p = i / 70, x = gx + p * gw;
     const y = gy + gh * 0.84 - (Math.sin(p * 4 - t * 0.6) * 0.1 + p * 0.2) * gh;
@@ -239,18 +318,18 @@ function drawBank(ctx, w, h, t) {
 function drawCloud(ctx, w, h, t) {
   chrome(ctx, w, h, 'cloud console', ui.accent2);
   const x0 = 92;
-  ctx.fillStyle = ui.ink; ctx.font = '600 19px system-ui, sans-serif';
-  ctx.fillText('Resource groups', x0, 66);
+  ctx.fillStyle = ui.ink; ctx.font = '700 34px system-ui, sans-serif';
+  ctx.fillText('Resource groups', x0, 76);
   ['app-service', 'sql-db', 'storage', 'functions', 'vnet', 'monitor'].forEach((n, i) => {
-    const y = 84 + i * 44;
-    ctx.fillStyle = ui.panel; ctx.fillRect(x0, y, w - x0 - 26, 34);
+    const y = 100 + i * 66;
+    ctx.fillStyle = ui.panel; ctx.fillRect(x0, y, w - x0 - 26, 54);
     const ok = Math.sin(t * 1.3 + i * 1.7) > -0.75;
     ctx.fillStyle = ok ? ui.accent : '#e8a33d';
-    ctx.beginPath(); ctx.arc(x0 + 17, y + 17, 5, 0, 7); ctx.fill();
-    ctx.fillStyle = ui.ink; ctx.font = '13px system-ui, sans-serif'; ctx.fillText(n, x0 + 32, y + 22);
-    ctx.fillStyle = ui.dim; ctx.font = '11px monospace'; ctx.fillText(ok ? 'running' : 'scaling', w - 96, y + 22);
+    ctx.beginPath(); ctx.arc(x0 + 26, y + 27, 9, 0, 7); ctx.fill();
+    ctx.fillStyle = ui.ink; ctx.font = '600 24px system-ui, sans-serif'; ctx.fillText(n, x0 + 48, y + 36);
+    ctx.fillStyle = ui.dim; ctx.font = '20px monospace'; ctx.fillText(ok ? 'running' : 'scaling', w - 150, y + 36);
   });
-  const by = 84 + 6 * 44 + 14, bh = h - by - 22;
+  const by = 100 + 6 * 66 + 14, bh = h - by - 22;
   if (bh > 24) {
     ctx.fillStyle = ui.panel; ctx.fillRect(x0, by, w - x0 - 26, bh);
     for (let i = 0; i < 16; i++) {
@@ -263,10 +342,10 @@ function drawCloud(ctx, w, h, t) {
 function drawCode(ctx, w, h, t) {
   ctx.fillStyle = '#11161c'; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#0b0f14'; ctx.fillRect(0, 0, w, 26);
-  ctx.fillStyle = '#5d7387'; ctx.font = '11px monospace'; ctx.fillText('room.js', 14, 18);
+  ctx.fillStyle = '#5d7387'; ctx.font = '18px monospace'; ctx.fillText('room.js', 14, 19);
   const cols = ['#7fd1a8', '#88b9e8', '#d9c98a', '#c58fd0', '#9aa7b4'];
   for (let i = 0; i < 22; i++) {
-    const y = 44 + i * 19;
+    const y = 56 + i * 32;
     if (y > h - 10) break;
     ctx.fillStyle = '#3a4856'; ctx.fillText(String(i + 1).padStart(2, ' '), 12, y);
     let x = 40;
@@ -275,12 +354,12 @@ function drawCode(ctx, w, h, t) {
       const wd = 26 + ((seed + k * 17) % 6) * 18;
       ctx.fillStyle = cols[(i + k) % cols.length];
       ctx.globalAlpha = 0.85;
-      ctx.fillRect(x, y - 8, wd, 9);
-      x += wd + 12;
+      ctx.fillRect(x, y - 14, wd * 1.4, 16);
+      x += wd * 1.4 + 16;
     }
     ctx.globalAlpha = 1;
   }
-  if (Math.sin(t * 4) > 0) { ctx.fillStyle = '#9fe3c0'; ctx.fillRect(46, 44 + 8 * 19 - 8, 8, 9); }
+  if (Math.sin(t * 4) > 0) { ctx.fillStyle = '#9fe3c0'; ctx.fillRect(46, 56 + 8 * 32 - 14, 12, 16); }
 }
 const matUltra = makeScreen('screen_main', 1600, 900, drawBank, './screen-main.png', false);
 const matSide = makeScreen('screen_side', 820, 620, drawCloud, './screen-side.png');
@@ -506,17 +585,16 @@ rbox('bed_guard_end_2', BW - 0.04, GH - 0.06, 0.02, 0.008, M.fabric, 0, BH + GH 
 add('bed_pegboard', new T.Mesh(new T.BoxGeometry(BW - 0.06, 0.55, 0.015), M.peg), 0, 0.95, -BL / 2 + 0.03, bed).castShadow = false;
 rbox('bed_pegboard_shelf', BW - 0.1, 0.02, 0.12, 0.005, M.frame, 0, 0.68, -BL / 2 + 0.09, bed);
 rbox('bed_pegboard_cup', 0.06, 0.09, 0.06, 0.02, M.frame, -0.3, 1.02, -BL / 2 + 0.07, bed);
-/* ladder leaning against the room-side end */
+/* ladder on the room-facing long side, leaning against the bed */
 const ladder = new T.Group(); ladder.name = 'bed_ladder';
-cyl('ladder_rail_1', 0.018, 0.018, 1.95, M.frame, -0.2, 0.975, 0, ladder, 14);
-cyl('ladder_rail_2', 0.018, 0.018, 1.95, M.frame, 0.2, 0.975, 0, ladder, 14);
-for (let i = 0; i < 6; i++) cyl('ladder_step_' + (i + 1), 0.015, 0.015, 0.4, M.frame, 0, 0.25 + i * 0.29, 0, ladder, 12).rotation.z = Math.PI / 2;
-ladder.position.set(0.1, 0, BL / 2 + 0.05); ladder.rotation.x = -0.17;
+cyl('ladder_rail_1', 0.018, 0.018, 1.95, M.frame, 0, 0.975, -0.2, ladder, 14);
+cyl('ladder_rail_2', 0.018, 0.018, 1.95, M.frame, 0, 0.975, 0.2, ladder, 14);
+for (let i = 0; i < 6; i++) cyl('ladder_step_' + (i + 1), 0.015, 0.015, 0.4, M.frame, 0, 0.25 + i * 0.29, 0, ladder, 12).rotation.x = Math.PI / 2;
+ladder.position.set(BW / 2 + 0.36, 0, 0.35); ladder.rotation.z = 0.17;
 bed.add(ladder);
 /* clothes slung over the ladder + rail */
-rbox('clothes_jacket', 0.36, 0.55, 0.06, 0.04, M.black, 0.1, BH + 0.25, BL / 2 + 0.08, bed).rotation.x = -0.17;
-rbox('clothes_khaki', 0.2, 0.42, 0.05, 0.03, M.cream, 0.25, BH + 0.12, BL / 2 + 0.12, bed).rotation.x = -0.17;
-rbox('clothes_towel', 0.05, 0.4, 0.22, 0.03, M.white, BW / 2 + 0.04, BH - 0.3, 0.55, bed);
+rbox('clothes_jacket', 0.06, 0.55, 0.36, 0.04, M.black, BW / 2 + 0.07, BH + 0.25, -0.45, bed).rotation.z = -0.1;
+rbox('clothes_khaki', 0.05, 0.42, 0.2, 0.03, M.cream, BW / 2 + 0.08, BH + 0.12, -0.72, bed).rotation.z = -0.08;
 /* under the bed */
 rbox('kids_chair_seat', 0.32, 0.03, 0.3, 0.02, M.teal, 0.05, 0.36, -0.55, bed);
 rbox('kids_chair_back', 0.3, 0.3, 0.03, 0.02, M.teal, 0.05, 0.53, -0.7, bed).rotation.x = -0.15;
@@ -551,37 +629,73 @@ rbox('step_stool_top', 0.3, 0.05, 0.2, 0.02, M.sky, -0.5, 0.24, 1.42);
 [-1, 1].forEach((sg, i) => rbox(`step_stool_leg_${i + 1}`, 0.06, 0.24, 0.18, 0.02, M.pink, -0.5 + sg * 0.1, 0.12, 1.42));
 rbox('backpack', 0.3, 0.4, 0.2, 0.06, M.black, -0.95, 0.2, 1.25).rotation.y = 0.4;
 
-/* ============ lighting ============ */
-stage._key.intensity = 0.55;
+/* ============ lighting: dim room, neon accents ============ */
+stage._key.intensity = 0.12;
 stage._key.position.set(4.5, 6.0, 3.0);
 stage._key.shadow.radius = 4;
-stage._ground.material.opacity = 0.06;
-stage._scene.traverse(o => { if (o.isHemisphereLight) o.intensity = 0.45; });
-stage._scene.add(new T.AmbientLight(0xf3f1ec, 0.42));
+stage._ground.material.opacity = 0.0;
+stage._scene.traverse(o => { if (o.isHemisphereLight) o.intensity = 0.08; });
+stage._scene.background = new T.Color(0x0b0d12);
+stage.style.background = '#0b0d12';
+stage._scene.add(new T.AmbientLight(0x35405a, 0.35));
+stage._scene.add(viewLight);
 
-const daylight = new T.DirectionalLight(0xfff3e0, 1.35);
-daylight.position.set(7, 3.4, 1.2);
-stage._scene.add(daylight);
-
-const windowFill = new T.RectAreaLight ? null : null;
-const winBounce = new T.PointLight(0xfff0d8, 1.9, 4.2, 2);
-winBounce.position.set(HW - 0.35, 1.45, 0.2);
-stage._scene.add(winBounce);
-
-const screenGlow = new T.PointLight(0x58b4dd, 0.7, 1.5, 2);
-screenGlow.position.set(DX - 0.16, DY + 0.3, DZ + 0.3);
-stage._scene.add(screenGlow);
-
-[[1.72, 0.5], [1.42, 2.5], [1.12, 4.4]].forEach(([sy, ang], i) => {
-  const p = new T.PointLight(0xffe7bd, 0.75, 1.9, 2);
-  p.position.set(HW - 0.42 + Math.cos(ang) * 0.2, sy - 0.12, -0.62 + Math.sin(ang) * 0.2);
-  p.name = 'lamp_light_' + (i + 1);
-  stage._scene.add(p);
-});
+const neon = [];
+const addNeon = (name, color, intensity, dist, x, y, z) => { const p = new T.PointLight(color, intensity, dist, 2); p.position.set(x, y, z); p.name = name; stage._scene.add(p); neon.push(p); return p; };
+/* red LED strip behind the desk */
+addNeon('neon_red_1', 0xff2a4a, 5.5, 2.6, DX - 0.3, DY + 0.05, DZ - 0.28);
+addNeon('neon_red_2', 0xff2a4a, 4.0, 2.4, DX + 0.5, DY + 0.05, DZ - 0.28);
+/* blue from the monitors */
+addNeon('neon_blue', 0x3d8dff, 2.2, 2.2, DX - 0.1, DY + 0.35, DZ + 0.35);
+/* warm yellow from the 3-shade lamp */
+[[1.72, 0.5], [1.42, 2.5], [1.12, 4.4]].forEach(([sy, ang], i) => addNeon('lamp_light_' + (i + 1), 0xffb347, 2.4, 2.4, HW - 0.42 + Math.cos(ang) * 0.2, sy - 0.12, -0.62 + Math.sin(ang) * 0.2));
+/* purple wash under the loft bed */
+addNeon('neon_purple', 0x8a4dff, 2.6, 2.4, -HW + 0.62, 1.3, -0.1);
+/* strip meshes so the glow has a visible source */
+box('led_strip_desk', DW - 0.1, 0.012, 0.012, new T.MeshStandardMaterial({ name: 'led_red', color: 0xff2a4a, emissive: 0xff2a4a, emissiveIntensity: 3, toneMapped: false }), DX, DY - 0.03, DZ - DD / 2 + 0.02);
+box('led_strip_bed', 0.012, 0.012, BL - 0.1, new T.MeshStandardMaterial({ name: 'led_purple', color: 0x8a4dff, emissive: 0x8a4dff, emissiveIntensity: 3, toneMapped: false }), -HW + 0.62 + BW / 2, BH - 0.05, -0.1);
 
 stage._renderer.toneMapping = T.ACESFilmicToneMapping;
-stage._renderer.toneMappingExposure = 1.0;
+stage._renderer.toneMappingExposure = 1.15;
 stage._controls.autoRotateSpeed = 0.7;
+
+/* ============ hover links + curtain click ============ */
+const LINKS = [
+  { test: n => n.startsWith('monitor_main') || n === 'screen_main', label: 'LG 32" Smart Monitor — view product', url: 'https://www.lg.com/ca_en/monitors/smart-monitors/32u720sa-w/' },
+  { test: n => n.startsWith('laptop_hp'), label: 'HP Elite x360 1040 G11 — view product', url: 'https://www.hp.com/us-en/shop/pdp/hp-elite-x360-1040-14-inch-g11-2-in-1-notebook-pc-wolf-pro-security-edition-p-cp3m0ua-aba-1' },
+  { test: n => n.startsWith('curtain'), label: 'Click to open / close the curtains', action: () => window.__toggleCurtains() },
+];
+const tip = document.createElement('div');
+tip.style.cssText = 'position:fixed;pointer-events:none;z-index:50;padding:8px 12px;border-radius:8px;background:rgba(12,14,20,.92);color:#f2f4f8;font:500 13px/1.2 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.4);opacity:0;transition:opacity .15s;white-space:nowrap';
+document.body.appendChild(tip);
+const ray = new T.Raycaster(), ndc = new T.Vector2();
+let hovered = null;
+function pick(ev) {
+  const r = stage.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, stage._camera);
+  const hits = ray.intersectObjects(stage._scene.children, true);
+  for (const h of hits) {
+    if (h.object.name === 'city_view' || h.object.name === 'window_glass') continue;
+    let o = h.object;
+    while (o) { const l = LINKS.find(L => L.test(o.name || '')); if (l) return l; o = o.parent; }
+    return null;
+  }
+  return null;
+}
+stage.addEventListener('pointermove', (ev) => {
+  hovered = pick(ev);
+  stage.style.cursor = hovered ? 'pointer' : '';
+  if (hovered) { tip.textContent = hovered.label; tip.style.left = (ev.clientX + 14) + 'px'; tip.style.top = (ev.clientY + 14) + 'px'; tip.style.opacity = '1'; }
+  else tip.style.opacity = '0';
+});
+let downAt = null;
+stage.addEventListener('pointerdown', (ev) => { downAt = [ev.clientX, ev.clientY]; });
+stage.addEventListener('pointerup', (ev) => {
+  if (!downAt || Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]) > 6) return;
+  const l = pick(ev); if (!l) return;
+  if (l.url) window.open(l.url, '_blank', 'noopener'); else if (l.action) l.action();
+});
 
 /* ============ animated screens ============ */
 const t0 = performance.now();
@@ -592,31 +706,53 @@ const t0 = performance.now();
     s.draw(s.ctx, s.w, s.h, t);
     s.tex.needsUpdate = true;
   }
+  /* curtains slide toward the frame edges */
+  curtain.open += (curtain.target - curtain.open) * 0.06;
+  [curtainL, curtainR].forEach(g => {
+    const pleats = g.children[0];
+    pleats.children.forEach((p, i) => { p.position.z = p.userData.baseZ * (1 - curtain.open * 0.82); p.scale.x = 1 + curtain.open * 0.5; });
+  });
+  viewLight.intensity = curtain.open * 3.2;
+  viewMat.opacity = Math.min(1, curtain.open * 1.4); cityView.visible = curtain.open > 0.01;
+  if (curtain.open > 0.02 && Math.floor(t * 30) % 2 === 0) { drawView(vctx, t); viewTex.needsUpdate = true; }
+  neon.forEach((p, i) => { if (p.name.startsWith('neon_red')) p.intensity = (i ? 4.0 : 5.5) * (0.92 + 0.08 * Math.sin(t * 2.1 + i)); });
   requestAnimationFrame(tick);
 })(t0);
 
 room.rotation.y = -0.55;
+const outside = [cityView, room.getObjectByName('window_backing')];
+outside.forEach(o => room.remove(o));
 stage.setObject(room);
+outside.forEach(o => room.add(o));
+const frame = () => { stage._camera.position.set(3.4, 2.9, 4.9); stage._controls.target.set(0, 1.0, 0); stage._controls.update(); };
+frame();
 
 /* ---- Blender drop-in: put a baked room.glb in this folder and it replaces the primitive room ---- */
 try {
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
   new GLTFLoader().load('./room.glb', (gltf) => {
     const baked = gltf.scene; baked.name = 'room_baked';
-    const liveMats = { screen_main: matUltra, screen_side: matSide, screen_laptop: matLap1 };
+    const liveMats = { screen_main: matUltra, screen_side: matSide, screen_laptop: matLap1, laptop_hp_screen: matLap2 };
+    const keepFromPrimitive = ['city_view', 'window_backing', 'window_glass', 'curtain_left', 'curtain_right', 'curtain_rod', 'curtain_finial_1', 'curtain_finial_2', 'led_strip_desk', 'led_strip_bed'];
     baked.traverse((o) => {
       if (!o.isMesh) return;
       if (liveMats[o.name]) { o.material = liveMats[o.name]; o.material.side = T.FrontSide; o.material.toneMapped = false; return; }
-      if (o.name === 'window_blinds') { o.material = new T.MeshBasicMaterial({ name: 'blinds', color: 0xf3eee4, transparent: true, opacity: 0.45, side: T.DoubleSide, toneMapped: false }); return; }
+      if (o.name === 'window_blinds' || o.name === 'window_glass') { o.visible = false; return; }
       const src = Array.isArray(o.material) ? o.material[0] : o.material;
       const map = src && (src.map || (src.emissiveMap));
       // baked lighting: unlit material so the bake shows exactly as rendered in Blender
-      o.material = new T.MeshBasicMaterial({ name: src ? src.name : o.name, map, color: map ? 0xffffff : (src && src.color) || 0xcccccc, toneMapped: false });
+      // dimmed bake as emissive + real-time neon lights layered on top
+      o.material = new T.MeshStandardMaterial({ name: src ? src.name : o.name, map, color: map ? 0xffffff : (src && src.color) || 0xcccccc, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.28, roughness: 1, metalness: 0 });
+      o.receiveShadow = true;
       if (map) { map.colorSpace = T.SRGBColorSpace; map.anisotropy = 8; map.flipY = false; }
     });
-    stage._scene.traverse((l) => { if (l.isLight && l !== stage._key) l.visible = false; });
     stage._ground.visible = false;
     baked.rotation.y = 0.55;
+    const late = [];
+    keepFromPrimitive.forEach(n => { const o = room.getObjectByName(n); if (!o) return; if (n === 'city_view' || n === 'window_backing') late.push(o); else baked.add(o); });
     stage.setObject(baked);
+    late.forEach(o => baked.add(o));
+    frame();
+    baked.updateMatrixWorld(true);
   }, undefined, () => {});
 } catch (e) { /* loader unavailable offline — primitive room stays */ }
