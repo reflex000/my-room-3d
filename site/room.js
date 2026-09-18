@@ -143,19 +143,22 @@ const cyl = (n, rt, rb, h, mat, x, y, z, p, seg = 24) => add(n, new T.Mesh(new T
 const tube = (n, len, r, mat, x, y, z, p) => add(n, new T.Mesh(new T.CapsuleGeometry(r, len, 6, 14), mat), x, y, z, p);
 
 /* ============ shell ============ */
-const HW = 1.85, RH = 2.5, TH = 0.09;
-add('floor', new T.Mesh(new T.BoxGeometry(HW * 2, TH, HW * 2), M.floor), 0, -TH / 2, 0).castShadow = false;
-box('wall_back', HW * 2, RH, TH, M.wall, 0, RH / 2, -HW + TH / 2);
-box('wall_left', TH, RH, HW * 2, M.wall, -HW + TH / 2, RH / 2, 0);
-box('wall_right_low', TH, 0.56, HW * 2, M.wall, HW - TH / 2, 0.28, 0);
-box('wall_right_pier', TH, RH, 0.5, M.wall, HW - TH / 2, RH / 2, -HW + 0.25);
-box('baseboard_back', HW * 2, 0.12, 0.022, M.trim, 0, 0.06, -HW + TH + 0.012);
-box('baseboard_left', 0.022, 0.12, HW * 2, M.trim, -HW + TH + 0.012, 0.06, 0);
-box('baseboard_right', 0.022, 0.12, HW * 2, M.trim, HW - TH - 0.012, 0.06, 0);
+/* HW = back/left extents (unchanged so desk, bed, chair and avatar waypoints keep their coords);
+   RX / FZ = right (window) wall and front edge, pushed out to open the room up: 4.4 m × 4.1 m ≈ 195 sq ft */
+const HW = 1.85, RH = 2.5, TH = 0.09, RX = 2.55, FZ = 2.25;
+const CX = (RX - HW) / 2, CZ = (FZ - HW) / 2, LX = HW + RX, LZ = HW + FZ;
+add('floor', new T.Mesh(new T.BoxGeometry(LX, TH, LZ), M.floor), CX, -TH / 2, CZ).castShadow = false;
+box('wall_back', LX, RH, TH, M.wall, CX, RH / 2, -HW + TH / 2);
+box('wall_left', TH, RH, LZ, M.wall, -HW + TH / 2, RH / 2, CZ);
+box('wall_right_low', TH, 0.56, LZ, M.wall, RX - TH / 2, 0.28, CZ);
+box('wall_right_pier', TH, RH, 0.5, M.wall, RX - TH / 2, RH / 2, -HW + 0.25);
+box('baseboard_back', LX, 0.12, 0.022, M.trim, CX, 0.06, -HW + TH + 0.012);
+box('baseboard_left', 0.022, 0.12, LZ, M.trim, -HW + TH + 0.012, 0.06, CZ);
+box('baseboard_right', 0.022, 0.12, LZ, M.trim, RX - TH - 0.012, 0.06, CZ);
 
 /* ============ window: frame, curtains, New West view outside ============ */
-const wx = HW - TH - 0.01;
-const WZ = 0.2, WW = 2.5, WH = 1.75, WY = 1.42;
+const wx = RX - TH - 0.01;
+const WZ = 0.4, WW = 2.5, WH = 1.75, WY = 1.42;
 box('window_frame_top', 0.08, 0.06, WW + 0.12, M.black, wx - 0.02, WY + WH / 2 + 0.03, WZ);
 box('window_frame_bottom', 0.08, 0.06, WW + 0.12, M.black, wx - 0.02, WY - WH / 2 - 0.03, WZ);
 box('window_frame_left', 0.08, WH + 0.12, 0.06, M.black, wx - 0.02, WY, WZ - WW / 2 - 0.03);
@@ -173,45 +176,55 @@ const bldgs = []; { let x = 0; let k = 0; while (x < VIEW_W) { const w = 40 + ((
 const cars = [{ x: 200, s: 62, c: '#f2f2f2' }, { x: 900, s: 48, c: '#2a2a2a' }, { x: 1300, s: 70, c: '#b53a2f' }];
 function drawView(ctx, t) {
   const W = VIEW_W, H = VIEW_H;
-  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.5); sky.addColorStop(0, '#5f9bd6'); sky.addColorStop(1, '#cfe2f1');
+  /* dusk sky */
+  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.45); sky.addColorStop(0, '#141b33'); sky.addColorStop(0.55, '#3b3f6e'); sky.addColorStop(1, '#c9764e');
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+  /* stars */
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; for (let i = 0; i < 60; i++) { const sx = (i * 137.5) % W, sy = ((i * 91.7) % (H * 0.22)); if (Math.sin(t * 2 + i) > -0.6) ctx.fillRect(sx, sy, 2, 2); }
   /* mountains */
-  ctx.fillStyle = '#8ea3b8'; ctx.beginPath(); ctx.moveTo(0, H * 0.34);
+  ctx.fillStyle = '#2b3350'; ctx.beginPath(); ctx.moveTo(0, H * 0.34);
   for (let x = 0; x <= W; x += 60) ctx.lineTo(x, H * 0.34 - Math.abs(Math.sin(x * 0.011) * 70 + Math.sin(x * 0.027) * 30));
   ctx.lineTo(W, H * 0.34); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#edf3f8'; for (let x = 0; x <= W; x += 60) { const y = H * 0.34 - Math.abs(Math.sin(x * 0.011) * 70 + Math.sin(x * 0.027) * 30); if (y < H * 0.27) { ctx.beginPath(); ctx.moveTo(x - 14, y + 14); ctx.lineTo(x, y); ctx.lineTo(x + 14, y + 14); ctx.fill(); } }
-  /* trees line + buildings */
-  ctx.fillStyle = '#4b6b45'; for (let x = 0; x < W; x += 34) { ctx.beginPath(); ctx.arc(x, H * 0.36, 22, 0, 7); ctx.fill(); }
-  bldgs.forEach(b => {
+  ctx.fillStyle = '#5a6488'; for (let x = 0; x <= W; x += 60) { const y = H * 0.34 - Math.abs(Math.sin(x * 0.011) * 70 + Math.sin(x * 0.027) * 30); if (y < H * 0.27) { ctx.beginPath(); ctx.moveTo(x - 14, y + 14); ctx.lineTo(x, y); ctx.lineTo(x + 14, y + 14); ctx.fill(); } }
+  /* tree line + towers with lit windows */
+  ctx.fillStyle = '#1c2a22'; for (let x = 0; x < W; x += 34) { ctx.beginPath(); ctx.arc(x, H * 0.36, 22, 0, 7); ctx.fill(); }
+  bldgs.forEach((b, bi) => {
     const top = H * 0.4 - b.h;
-    ctx.fillStyle = b.c; ctx.fillRect(b.x, top, b.w, b.h);
-    ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(b.x + b.w - 8, top, 8, b.h);
-    ctx.fillStyle = '#6f8faa';
-    for (let yy = top + 10; yy < H * 0.4 - 12; yy += 16) for (let xx = b.x + 6; xx < b.x + b.w - 8; xx += 14) ctx.fillRect(xx, yy, 7, 9);
-    if (b.tower) { ctx.fillStyle = '#b8483f'; ctx.fillRect(b.x, top - 6, b.w, 6); }
+    ctx.fillStyle = '#1f2433'; ctx.fillRect(b.x, top, b.w, b.h);
+    ctx.fillStyle = '#151a26'; ctx.fillRect(b.x + b.w - 8, top, 8, b.h);
+    let k = 0;
+    for (let yy = top + 10; yy < H * 0.4 - 12; yy += 16) for (let xx = b.x + 6; xx < b.x + b.w - 8; xx += 14, k++) {
+      const lit = ((bi * 31 + k * 17) % 7) < 3;
+      ctx.fillStyle = lit ? (k % 5 ? '#ffd58a' : '#bfe0ff') : '#2a3142'; ctx.fillRect(xx, yy, 7, 9);
+    }
+    if (b.tower) { ctx.fillStyle = '#ff4a4a'; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 3 + bi); ctx.fillRect(b.x + b.w / 2 - 3, top - 10, 6, 6); ctx.globalAlpha = 1; }
   });
-  /* SkyTrain guideway + moving train */
-  ctx.fillStyle = '#bdb6ab'; ctx.fillRect(0, H * 0.42, W, 26);
-  ctx.fillStyle = '#a49d92'; for (let x = 60; x < W; x += 220) ctx.fillRect(x, H * 0.42 + 26, 18, 70);
+  /* SkyTrain guideway + lit train */
+  ctx.fillStyle = '#3a3f4d'; ctx.fillRect(0, H * 0.42, W, 26);
+  ctx.fillStyle = '#2e3340'; for (let x = 60; x < W; x += 220) ctx.fillRect(x, H * 0.42 + 26, 18, 70);
   const tx = ((t * 120) % (W + 500)) - 400;
-  for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#e9ecef' : '#f4f6f8'; ctx.fillRect(tx + i * 96, H * 0.42 - 34, 90, 34); ctx.fillStyle = '#3b7dd8'; ctx.fillRect(tx + i * 96, H * 0.42 - 12, 90, 5); ctx.fillStyle = '#233'; for (let k = 0; k < 4; k++) ctx.fillRect(tx + i * 96 + 8 + k * 21, H * 0.42 - 28, 14, 11); }
-  /* warehouses */
-  ctx.fillStyle = '#e8d9d3'; ctx.fillRect(0, H * 0.5, W * 0.32, 60); ctx.fillStyle = '#d9d2c7'; ctx.fillRect(W * 0.6, H * 0.5, W * 0.3, 55);
-  ctx.fillStyle = '#c94a3d'; ctx.fillRect(W * 0.72, H * 0.5, 90, 14);
-  /* rail yard: ballast + tracks */
-  ctx.fillStyle = '#c8c1b3'; ctx.fillRect(0, H * 0.58, W, H * 0.24);
-  for (let r = 0; r < 4; r++) { const y = H * 0.62 + r * 40; ctx.fillStyle = '#7a6f62'; for (let x = 0; x < W; x += 18) ctx.fillRect(x, y - 3, 10, 12); ctx.fillStyle = '#4b4a48'; ctx.fillRect(0, y, W, 3); ctx.fillRect(0, y + 6, W, 3); }
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = '#d8dce3'; ctx.fillRect(tx + i * 96, H * 0.42 - 34, 90, 34); ctx.fillStyle = '#3b7dd8'; ctx.fillRect(tx + i * 96, H * 0.42 - 12, 90, 5); ctx.fillStyle = '#ffe9b5'; for (let k = 0; k < 4; k++) ctx.fillRect(tx + i * 96 + 8 + k * 21, H * 0.42 - 28, 14, 11); }
+  ctx.fillStyle = '#fff6d6'; ctx.fillRect(tx + 4 * 96 - 8, H * 0.42 - 20, 8, 6);
+  /* warehouses with sodium lights */
+  ctx.fillStyle = '#3a3634'; ctx.fillRect(0, H * 0.5, W * 0.32, 60); ctx.fillStyle = '#34353a'; ctx.fillRect(W * 0.6, H * 0.5, W * 0.3, 55);
+  ctx.fillStyle = '#ffb35c'; for (let x = 40; x < W * 0.32; x += 90) ctx.fillRect(x, H * 0.5 + 14, 10, 6); for (let x = W * 0.6 + 40; x < W * 0.9; x += 90) ctx.fillRect(x, H * 0.5 + 12, 10, 6);
+  /* rail yard */
+  ctx.fillStyle = '#2b2a2c'; ctx.fillRect(0, H * 0.58, W, H * 0.24);
+  for (let r = 0; r < 4; r++) { const y = H * 0.62 + r * 40; ctx.fillStyle = '#3d3834'; for (let x = 0; x < W; x += 18) ctx.fillRect(x, y - 3, 10, 12); ctx.fillStyle = '#6e6f73'; ctx.fillRect(0, y, W, 3); ctx.fillRect(0, y + 6, W, 3); }
+  /* yard floodlights */
+  for (let x = 120; x < W; x += 420) { const g = ctx.createRadialGradient(x, H * 0.56, 5, x, H * 0.56, 200); g.addColorStop(0, 'rgba(255,190,110,0.35)'); g.addColorStop(1, 'rgba(255,190,110,0)'); ctx.fillStyle = g; ctx.fillRect(x - 200, H * 0.5, 400, 300); ctx.fillStyle = '#5a5a5e'; ctx.fillRect(x - 2, H * 0.5, 4, H * 0.1); ctx.fillStyle = '#fff1c8'; ctx.fillRect(x - 8, H * 0.5 - 4, 16, 5); }
   /* boxcars crawling on two tracks */
-  const drawCars = (y, speed, offset, cols) => { const shift = ((t * speed + offset) % 260); for (let x = -260 + shift; x < W + 20; x += 260) { const c = cols[Math.floor((x + 3000) / 260) % cols.length]; ctx.fillStyle = c; ctx.fillRect(x, y - 52, 240, 54); ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x + 100, y - 46, 30, 42); ctx.fillStyle = '#e6e1d6'; ctx.fillRect(x + 20, y - 40, 60, 14); ctx.fillStyle = '#8fd0c6'; ctx.fillRect(x + 150, y - 24, 70, 14); ctx.fillStyle = '#222'; ctx.fillRect(x + 20, y, 24, 8); ctx.fillRect(x + 190, y, 24, 8); } };
-  drawCars(H * 0.62 - 2, 9, 0, ['#a63b31', '#8e3a2c', '#b8452f', '#c9862a']);
-  drawCars(H * 0.70 - 2, -6, 120, ['#a63b31', '#e2ddd3', '#a63b31', '#b8452f']);
-  /* fence, road, cars */
-  ctx.fillStyle = '#6a6c66'; ctx.fillRect(0, H * 0.84, W, 6);
-  ctx.fillStyle = '#5e5f5c'; ctx.fillRect(0, H * 0.87, W, H * 0.13);
-  ctx.fillStyle = '#e8c53a'; for (let x = 0; x < W; x += 80) ctx.fillRect(x, H * 0.93, 40, 4);
-  cars.forEach(c => { c.x = (c.x + c.s * 0.016 + W) % (W + 200) - 100; ctx.fillStyle = c.c; ctx.fillRect(c.x, H * 0.89, 78, 26); ctx.fillStyle = '#333'; ctx.fillRect(c.x + 14, H * 0.89 - 12, 46, 14); ctx.fillStyle = '#111'; ctx.fillRect(c.x + 8, H * 0.89 + 24, 14, 8); ctx.fillRect(c.x + 56, H * 0.89 + 24, 14, 8); });
+  const drawCars = (y, speed, offset, cols) => { const shift = ((t * speed + offset) % 260); for (let x = -260 + shift; x < W + 20; x += 260) { const c = cols[Math.floor((x + 3000) / 260) % cols.length]; ctx.fillStyle = c; ctx.fillRect(x, y - 52, 240, 54); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x + 100, y - 46, 30, 42); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 20, y - 40, 60, 14); ctx.fillStyle = '#1a1a1a'; ctx.fillRect(x + 20, y, 24, 8); ctx.fillRect(x + 190, y, 24, 8); } };
+  drawCars(H * 0.62 - 2, 9, 0, ['#6b2a24', '#5c2b22', '#7a3124', '#7a5420']);
+  drawCars(H * 0.70 - 2, -6, 120, ['#6b2a24', '#8a867c', '#6b2a24', '#7a3124']);
+  /* fence, road with streetlights + headlights */
+  ctx.fillStyle = '#44464a'; ctx.fillRect(0, H * 0.84, W, 6);
+  ctx.fillStyle = '#2a2b2e'; ctx.fillRect(0, H * 0.87, W, H * 0.13);
+  ctx.fillStyle = '#b8a04a'; for (let x = 0; x < W; x += 80) ctx.fillRect(x, H * 0.93, 40, 3);
+  for (let x = 200; x < W; x += 500) { const g = ctx.createRadialGradient(x, H * 0.87, 4, x, H * 0.87, 150); g.addColorStop(0, 'rgba(255,214,150,0.45)'); g.addColorStop(1, 'rgba(255,214,150,0)'); ctx.fillStyle = g; ctx.fillRect(x - 150, H * 0.75, 300, 250); ctx.fillStyle = '#6a6b70'; ctx.fillRect(x - 2, H * 0.72, 4, H * 0.15); ctx.fillStyle = '#fff3d0'; ctx.fillRect(x - 10, H * 0.72 - 3, 20, 5); }
+  cars.forEach(c => { c.x = (c.x + c.s * 0.016 + W) % (W + 200) - 100; ctx.fillStyle = c.c; ctx.fillRect(c.x, H * 0.89, 78, 26); ctx.fillStyle = '#1b1c20'; ctx.fillRect(c.x + 14, H * 0.89 - 12, 46, 14); ctx.fillStyle = '#111'; ctx.fillRect(c.x + 8, H * 0.89 + 24, 14, 8); ctx.fillRect(c.x + 56, H * 0.89 + 24, 14, 8); ctx.fillStyle = '#fff6d0'; ctx.fillRect(c.x + 74, H * 0.89 + 8, 8, 6); ctx.fillStyle = '#ff5050'; ctx.fillRect(c.x - 4, H * 0.89 + 8, 6, 6); });
   /* street tree in front */
-  ctx.fillStyle = '#3c5a36'; ctx.beginPath(); ctx.arc(W * 0.78, H * 0.8, 70, 0, 7); ctx.fill(); ctx.fillStyle = '#4c6e44'; ctx.beginPath(); ctx.arc(W * 0.8, H * 0.74, 55, 0, 7); ctx.fill();
+  ctx.fillStyle = '#16231a'; ctx.beginPath(); ctx.arc(W * 0.78, H * 0.8, 70, 0, 7); ctx.fill(); ctx.fillStyle = '#1d2f22'; ctx.beginPath(); ctx.arc(W * 0.8, H * 0.74, 55, 0, 7); ctx.fill();
 }
 drawView(vctx, 0); viewTex.needsUpdate = true;
 const viewMat = new T.MeshBasicMaterial({ name: 'city_view', map: viewTex, toneMapped: false, transparent: true, opacity: 0 });
@@ -220,7 +233,10 @@ cityView.rotation.y = -Math.PI / 2; cityView.castShadow = false; cityView.receiv
 /* backing so the view never shows from behind the wall */
 const backing = add('window_backing', new T.Mesh(new T.PlaneGeometry(WW + 0.2, WH + 0.2), new T.MeshBasicMaterial({ name: 'window_backing', color: 0x05070c, side: T.FrontSide })), wx + 0.08, WY, WZ);
 backing.rotation.y = -Math.PI / 2; backing.castShadow = false; backing.receiveShadow = false;
-const viewLight = new T.PointLight(0xfff3dc, 0, 5, 2); viewLight.position.set(wx + 0.6, WY, WZ);
+const viewLight = new T.PointLight(0xc9a27a, 0, 5, 2); viewLight.position.set(wx + 0.6, WY, WZ);
+/* drop a photo of the real view named window-view.jpg next to index.html and it replaces the painted city */
+let viewPhoto = false;
+new T.TextureLoader().load('./window-view.jpg', (tx) => { tx.colorSpace = T.SRGBColorSpace; tx.anisotropy = 8; viewMat.map = tx; viewMat.needsUpdate = true; viewPhoto = true; }, undefined, () => {});
 
 /* curtains: two grey panels on a black rod, click to open */
 const curtainMat = new T.MeshStandardMaterial({ name: 'curtain_grey', color: 0xb9bdc3, roughness: 1, side: T.DoubleSide, emissive: 0x3a3f4a, emissiveIntensity: 0.6 });
@@ -400,13 +416,13 @@ rbox('monitor_side_shell', 0.56, 0.34, 0.026, 0.012, M.black, 0, 0.17, 0, sideMo
 add('monitor_side_panel', new T.Mesh(new T.PlaneGeometry(0.538, 0.318), matSide), 0, 0.17, 0.015, sideMon).castShadow = false;
 rbox('monitor_side_vesa', 0.1, 0.1, 0.03, 0.01, M.black, 0, 0.17, -0.025, sideMon);
 sideMon.position.set(DX + 0.62, DY + 0.24, DZ - 0.12);
-sideMon.rotation.y = -0.42;
+sideMon.rotation.y = -0.3;
 room.add(sideMon);
 cyl('monitor_arm_pole', 0.018, 0.018, 0.5, M.black, DX + 0.78, DY + 0.27, DZ - 0.3, null, 20);
 cyl('monitor_arm_ring', 0.022, 0.022, 0.05, M.red, DX + 0.78, DY + 0.36, DZ - 0.3, null, 20);
 cyl('monitor_arm_clamp', 0.03, 0.03, 0.04, M.black, DX + 0.78, DY + 0.04, DZ - 0.3, null, 20);
-const armH = rbox('monitor_arm_horizontal', 0.26, 0.03, 0.03, 0.01, M.black, DX + 0.7, DY + 0.41, DZ - 0.22);
-armH.rotation.y = -0.6;
+const armH = rbox('monitor_arm_horizontal', 0.26, 0.03, 0.03, 0.01, M.black, DX + 0.7, DY + 0.41, DZ - 0.21);
+armH.rotation.y = 0.85;   // points from the pole (DX+0.78, DZ-0.3) to the VESA plate (DX+0.62, DZ-0.12)
 
 /* ============ laptops ============ */
 function laptop(name, w, d, mat, x, y, z, rotY, openAng) {
@@ -516,7 +532,7 @@ for (let i = 0; i < 26; i++) {
   lf.scale.set(1, 0.2, 0.7);
   lf.rotation.set(a * 0.4, a, 0.4);
 }
-lamp.position.set(HW - 0.42, 0, -0.62);
+lamp.position.set(RX - 0.42, 0, -0.62);
 room.add(lamp);
 
 /* ============ mesh office chair ============ */
@@ -555,7 +571,7 @@ chair.rotation.y = -0.35;
 room.add(chair);
 
 /* ============ avatar sitting on the chair (avatar.js) ============ */
-const avatar = createAvatar({ T, stage, seat: { x: chair.position.x, z: chair.position.z, rotY: chair.rotation.y } });
+const avatar = createAvatar({ T, stage, seat: { x: 0.5, z: -0.28, rotY: -0.35 } });
 room.add(avatar.group);
 avatar.setChair(chair);
 window.__avatar = avatar;
@@ -573,6 +589,13 @@ rbox('bed_frame_end_2', BW, 0.07, 0.05, 0.012, M.frame, 0, BH, BL / 2, bed);
 for (let i = 0; i < 14; i++) box('bed_slat_' + (i + 1), BW - 0.06, 0.018, 0.06, M.slat, 0, BH - 0.01, -BL / 2 + 0.1 + i * (BL - 0.2) / 13, bed);
 rbox('bed_mattress', BW - 0.1, 0.12, BL - 0.12, 0.04, M.paper, 0, BH + 0.09, 0, bed);
 rbox('bed_duvet', BW - 0.12, 0.08, 1.2, 0.04, M.lime, 0, BH + 0.18, 0.25, bed);
+rbox('bed_pillow', 0.52, 0.1, 0.32, 0.045, M.white, 0, BH + 0.2, -BL / 2 + 0.3, bed);
+/* clip-on reading light on the head-end rail */
+const readMat = new T.MeshStandardMaterial({ name: 'reading_light_bulb', color: 0xffe2b0, emissive: 0xffc98a, emissiveIntensity: 2.5, toneMapped: false });
+rbox('bed_light_clip', 0.05, 0.06, 0.04, 0.01, M.black, -BW / 2 + 0.14, BH + GH + 0.02, -BL / 2 + 0.05, bed);
+const readArm = cyl('bed_light_arm', 0.006, 0.006, 0.2, M.black, -BW / 2 + 0.2, BH + GH + 0.13, -BL / 2 + 0.12, bed, 10); readArm.rotation.set(0.5, 0, -0.6);
+const readHead = cyl('bed_light_head', 0.03, 0.045, 0.06, M.black, -BW / 2 + 0.27, BH + GH + 0.2, -BL / 2 + 0.2, bed, 18); readHead.rotation.set(0.9, 0, -0.5);
+const readBulb = add('bed_light_bulb', new T.Mesh(new T.CircleGeometry(0.028, 18), readMat), -BW / 2 + 0.285, BH + GH + 0.175, -BL / 2 + 0.225, bed); readBulb.rotation.set(0.9 - Math.PI / 2, 0, -0.5);
 /* top rails */
 rbox('bed_rail_side_r', 0.03, 0.03, BL, 0.012, M.frame, BW / 2, BH + GH, 0, bed);
 rbox('bed_rail_side_l', 0.03, 0.03, BL, 0.012, M.frame, -BW / 2, BH + GH, 0, bed);
@@ -622,16 +645,16 @@ bed.position.set(-HW + 0.62, 0, -0.1);
 room.add(bed);
 
 /* ============ floor extras ============ */
-const rug = cyl('rug', 1.05, 1.05, 0.014, M.rug, 0.25, 0.007, 0.75, null, 40);
-rug.castShadow = false; rug.scale.set(1.25, 1, 0.95);
+const rug = cyl('rug', 1.05, 1.05, 0.014, M.rug, 0.55, 0.007, 0.9, null, 40);
+rug.castShadow = false; rug.scale.set(1.45, 1, 1.05);
 const ball = new T.Group(); ball.name = 'basketball';
 add('basketball_body', new T.Mesh(new T.SphereGeometry(0.12, 28, 20), M.teal), 0, 0.12, 0, ball);
 add('basketball_seam_1', new T.Mesh(new T.TorusGeometry(0.12, 0.006, 8, 40), M.navy), 0, 0.12, 0, ball).rotation.x = Math.PI / 2;
 add('basketball_seam_2', new T.Mesh(new T.TorusGeometry(0.12, 0.006, 8, 40), M.navy), 0, 0.12, 0, ball).rotation.y = 0.6;
 add('basketball_seam_3', new T.Mesh(new T.TorusGeometry(0.12, 0.004, 8, 40), M.white), 0, 0.12, 0, ball).rotation.set(0.5, 1.2, 0);
 ball.position.set(DX + 0.55, 0, DZ + 0.3); room.add(ball);
-cyl('waste_basket', 0.15, 0.12, 0.26, M.teal, HW - 0.36, 0.13, -0.06, null, 24);
-rbox('lego_bin', 0.3, 0.16, 0.2, 0.02, M.yellow, HW - 0.3, 0.62, 0.95);
+cyl('waste_basket', 0.15, 0.12, 0.26, M.teal, RX - 0.36, 0.13, -0.06, null, 24);
+rbox('lego_bin', 0.3, 0.16, 0.2, 0.02, M.yellow, RX - 0.3, 0.62, 1.1);
 rbox('step_stool_top', 0.3, 0.05, 0.2, 0.02, M.sky, -0.5, 0.24, 1.42);
 [-1, 1].forEach((sg, i) => rbox(`step_stool_leg_${i + 1}`, 0.06, 0.24, 0.18, 0.02, M.pink, -0.5 + sg * 0.1, 0.12, 1.42));
 rbox('backpack', 0.3, 0.4, 0.2, 0.06, M.black, -0.95, 0.2, 1.25).rotation.y = 0.4;
@@ -655,7 +678,9 @@ addNeon('neon_red_2', 0xff2a4a, 4.0, 2.4, DX + 0.5, DY + 0.05, DZ - 0.28);
 /* blue from the monitors */
 addNeon('neon_blue', 0x3d8dff, 2.2, 2.2, DX - 0.1, DY + 0.35, DZ + 0.35);
 /* warm yellow from the 3-shade lamp */
-[[1.72, 0.5], [1.42, 2.5], [1.12, 4.4]].forEach(([sy, ang], i) => addNeon('lamp_light_' + (i + 1), 0xffb347, 2.4, 2.4, HW - 0.42 + Math.cos(ang) * 0.2, sy - 0.12, -0.62 + Math.sin(ang) * 0.2));
+[[1.72, 0.5], [1.42, 2.5], [1.12, 4.4]].forEach(([sy, ang], i) => addNeon('lamp_light_' + (i + 1), 0xffb347, 2.4, 2.4, RX - 0.42 + Math.cos(ang) * 0.2, sy - 0.12, -0.62 + Math.sin(ang) * 0.2));
+/* warm reading light over the pillow */
+addNeon('bed_reading_light', 0xffc98a, 1.8, 1.7, -HW + 0.62 - 0.15, BH + GH + 0.1, -0.1 - BL / 2 + 0.35);
 /* purple wash under the loft bed */
 addNeon('neon_purple', 0x8a4dff, 2.6, 2.4, -HW + 0.62, 1.3, -0.1);
 /* strip meshes so the glow has a visible source */
@@ -688,7 +713,7 @@ function pick(ev) {
     if (h.object.name === 'city_view' || h.object.name === 'window_glass') continue;
     let o = h.object;
     /* baked glb merges the HP body into room_props — treat hits near its screen as the laptop */
-    if (o.name === 'room_props') {
+    if (o.name === 'room_props' || o.name === 'desk_items') {
       const scr = stage._scene.getObjectByName('laptop_hp_screen');
       if (scr && h.point.distanceTo(new T.Box3().setFromObject(scr).getCenter(new T.Vector3())) < 0.3) return LINKS.find(L => L.test('laptop_hp'));
     }
@@ -734,9 +759,9 @@ const t0 = performance.now();
     const pleats = g.children[0];
     pleats.children.forEach((p, i) => { p.position.z = p.userData.baseZ * (1 - curtain.open * 0.82); p.scale.x = 1 + curtain.open * 0.5; });
   });
-  viewLight.intensity = curtain.open * 3.2;
+  viewLight.intensity = curtain.open * 1.6;
   viewMat.opacity = Math.min(1, curtain.open * 1.4); cityView.visible = curtain.open > 0.01;
-  if (curtain.open > 0.02 && Math.floor(t * 30) % 2 === 0) { drawView(vctx, t); viewTex.needsUpdate = true; }
+  if (!viewPhoto && curtain.open > 0.02 && Math.floor(t * 30) % 2 === 0) { drawView(vctx, t); viewTex.needsUpdate = true; }
   neon.forEach((p, i) => { if (p.name.startsWith('neon_red')) p.intensity = (i ? 4.0 : 5.5) * (0.92 + 0.08 * Math.sin(t * 2.1 + i)); });
   requestAnimationFrame(tick);
 })(t0);
@@ -746,19 +771,21 @@ const outside = [cityView, room.getObjectByName('window_backing')];
 outside.forEach(o => room.remove(o));
 stage.setObject(room);
 outside.forEach(o => room.add(o));
-const frame = () => { stage._camera.position.set(3.4, 2.9, 4.9); stage._controls.target.set(0, 1.0, 0); stage._controls.update(); };
+const frame = () => { stage._camera.position.set(4.1, 3.1, 5.5); stage._controls.target.set(0.3, 1.0, 0.2); stage._controls.update(); };
 frame();
 
 /* ---- Blender drop-in: put a baked room.glb in this folder and it replaces the primitive room ---- */
 try {
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  new GLTFLoader().load('./room.glb', (gltf) => {
+  const loader = new GLTFLoader();
+  const onGlb = (gltf) => {
     const baked = gltf.scene; baked.name = 'room_baked';
     const liveMats = { screen_main: matUltra, screen_side: matSide, screen_laptop: matLap1, laptop_hp_screen: matLap2 };
     const keepFromPrimitive = ['city_view', 'window_backing', 'window_glass', 'curtain_left', 'curtain_right', 'curtain_rod', 'curtain_finial_1', 'curtain_finial_2', 'led_strip_desk', 'led_strip_bed', 'avatar'];
     baked.traverse((o) => {
       if (!o.isMesh) return;
       if (liveMats[o.name]) { o.material = liveMats[o.name]; o.material.side = T.FrontSide; o.material.toneMapped = false; return; }
+      if (o.name === 'bed_light_bulb') { o.material = readMat; return; }
       if (o.name === 'window_blinds' || o.name === 'window_glass') { o.visible = false; return; }
       const src = Array.isArray(o.material) ? o.material[0] : o.material;
       const map = src && (src.map || (src.emissiveMap));
@@ -770,22 +797,48 @@ try {
     });
     stage._ground.visible = false;
     baked.rotation.y = 0.55;
-    /* carve the office chair out of the merged props mesh so the avatar can swivel / roll it */
+    /* v3 bake exports the chair as its own object (pivot on the floor at the chair centre, rotation.y = -0.35) */
+    let chairBaked = baked.getObjectByName('chair');
+    /* unbaked export (Step 2 only, no Step 3): hundreds of loose chair_* meshes — group them so the swivel still works */
+    if (!chairBaked && !baked.getObjectByName('room_props')) {
+      console.warn('[room] room-v3.glb is NOT baked (no room_props / chair objects). Re-run Blender Step 3 then Step 4.');
+      const parts = []; baked.traverse(o => { if (o.isMesh && o.name.startsWith('chair_')) parts.push(o); });
+      if (parts.length) {
+        const pivot = new T.Group(); pivot.name = 'chair'; pivot.position.set(0.5, 0, -0.28); pivot.rotation.y = -0.35;
+        baked.add(pivot); baked.updateMatrixWorld(true);
+        parts.forEach(p => pivot.attach(p));
+        chairBaked = pivot;
+      }
+    }
+    /* old v2 bake (no separate chair): its window wall is still at x = HW, so slide the live window set back onto it */
+    if (!chairBaked) {
+      const dx = (HW - TH - 0.01) - wx;
+      ['curtain_left', 'curtain_right', 'curtain_rod', 'curtain_finial_1', 'curtain_finial_2', 'window_glass', 'window_backing', 'city_view'].forEach(n => { const o = room.getObjectByName(n); if (o) { o.position.x += dx; o.position.z -= 0.2; } });
+      viewLight.position.x += dx;
+    }
+    if (chairBaked) { chairBaked.traverse(o => { if (o.isMesh) o.castShadow = true; }); avatar.setChair(chairBaked); }
+    /* fallback for the v2 bake: carve the chair out of the merged props mesh */
     const props = baked.getObjectByName('room_props');
-    if (props && props.geometry.index) {
+    if (!chairBaked && props && props.geometry.index) {
       props.updateMatrix();
       const g = props.geometry, idx = g.index.array, pos = g.attributes.position, keep = [], take = [], c = new T.Vector3();
-      const cx = chair.position.x, cz = chair.position.z;
+      const cx = 0.5, cz = -0.28;   // baked chair centre — the primitive chair has already been rolled by the avatar by now
       for (let i = 0; i < idx.length; i += 3) {
         c.set(0, 0, 0); for (let k = 0; k < 3; k++) c.add(new T.Vector3().fromBufferAttribute(pos, idx[i + k])); c.multiplyScalar(1 / 3).applyMatrix4(props.matrix);
-        (c.y > -0.005 && c.y < 1.35 && Math.hypot(c.x - cx, c.z - cz) < 0.42 ? take : keep).push(idx[i], idx[i + 1], idx[i + 2]);
+        /* reject long triangles (desk-top bevel strips) — the chair has no edge over 0.5 m */
+        const p0 = new T.Vector3().fromBufferAttribute(pos, idx[i]), p1 = new T.Vector3().fromBufferAttribute(pos, idx[i + 1]), p2 = new T.Vector3().fromBufferAttribute(pos, idx[i + 2]);
+        const longEdge = Math.max(p0.distanceTo(p1), p1.distanceTo(p2), p2.distanceTo(p0)) > 0.5;
+        (!longEdge && c.y > -0.005 && c.y < 1.35 && Math.hypot(c.x - cx, c.z - cz) < 0.42 ? take : keep).push(idx[i], idx[i + 1], idx[i + 2]);
       }
       if (take.length) {
         const cg = new T.BufferGeometry(); for (const a in g.attributes) cg.setAttribute(a, g.attributes[a]); cg.setIndex(take); cg.computeBoundingSphere();
         g.setIndex(keep); g.computeBoundingSphere();
         const chairMesh = new T.Mesh(cg, props.material); chairMesh.name = 'chair_baked'; chairMesh.castShadow = chairMesh.receiveShadow = true;
         chairMesh.position.copy(props.position); chairMesh.quaternion.copy(props.quaternion); chairMesh.scale.copy(props.scale);
-        const holder = new T.Group(); holder.position.set(-cx, 0, -cz); holder.add(chairMesh);
+        /* the carved geometry already carries the baked yaw (-0.35); pre-rotate the holder so pivot.rotation.y = yaw is absolute */
+        const BAKED_YAW = 0.35;   // the v2 Blender script baked the chair at +0.35 (sign bug, see README) — never read the live chair rotation here
+        const y0 = -BAKED_YAW, holder = new T.Group(); holder.rotation.y = y0;
+        holder.position.set(-cx * Math.cos(y0) - cz * Math.sin(y0), 0, cx * Math.sin(y0) - cz * Math.cos(y0)); holder.add(chairMesh);
         const pivot = new T.Group(); pivot.name = 'chair'; pivot.position.set(cx, 0, cz); pivot.rotation.y = chair.rotation.y; pivot.add(holder);
         baked.add(pivot); avatar.setChair(pivot);
       }
@@ -796,5 +849,6 @@ try {
     late.forEach(o => baked.add(o));
     frame();
     baked.updateMatrixWorld(true);
-  }, undefined, () => {});
+  };
+  loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {}));
 } catch (e) { /* loader unavailable offline — primitive room stays */ }

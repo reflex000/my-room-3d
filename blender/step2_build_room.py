@@ -44,7 +44,7 @@ def smooth_shade(o):
         try: f(); return
         except Exception: pass
 
-def finish(o, name, m, bevel=0.012, seg=3, smooth=False, parent=None):
+def finish(o, name, m, bevel=0.012, seg=4, smooth=False, parent=None):
     o.name = name; o.data.name = name
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     o.data.materials.append(m)
@@ -148,27 +148,38 @@ MINT = mat('mint_bin', 'b9cbb8', 0.9)
 CHROME = mat('chrome', 'd9dcdf', 0.2, 0.8)
 PEG = mat('pegboard', 'eeedea', 0.8)
 HALL = mat('hall_dark', '6d675f', 1.0)
-BLIND = mat('blinds', 'efeae1', 0.95, emit='fff4e2', strength=0.5, alpha=0.7)
-SCREEN_MAIN = mat('screen_main', '0d1b25', 0.2, emit='3f9fd0', strength=2.0)
+SCREEN_MAIN = mat('screen_main', '0d1b25', 0.2, emit='3f9fd0', strength=4.0)
 SCREEN_SIDE = mat('screen_side', '0d1b25', 0.2, emit='3fb98f', strength=1.8)
 SCREEN_LAP = mat('screen_laptop', '11161c', 0.2, emit='7fd1a8', strength=1.6)
 LED = mat('led_display', '2a3f52', 0.3, emit='6ad2ff', strength=3.0)
-SHADE = mat('shade_white', 'f7f6f3', 0.5, emit='ffeccf', strength=0.8)
+SHADE = mat('shade_white', 'f7f6f3', 0.5, emit='ffd9a0', strength=2.5)
 
 # ---------- shell ----------
-HW, TH, RH = 1.85, 0.09, 2.5
-box('floor', HW * 2, HW * 2, 0.05, FLOOR, 0, 0, -0.025, bevel=0)
-box('wall_back', HW * 2, TH, RH, WALL, 0, HW - TH / 2, RH / 2, bevel=0)
-box('wall_left', TH, HW * 2, RH, WALL, -HW + TH / 2, 0, RH / 2, bevel=0)
-box('wall_right_low', TH, HW * 2, 0.56, WALL, HW - TH / 2, 0, 0.28, bevel=0)
-box('wall_right_pier', TH, 0.5, RH, WALL, HW - TH / 2, HW - 0.25, RH / 2, bevel=0)
-box('baseboard_back', HW * 2, 0.022, 0.12, TRIM, 0, HW - TH - 0.012, 0.06, bevel=0.004)
-box('baseboard_left', 0.022, HW * 2, 0.12, TRIM, -HW + TH + 0.012, 0, 0.06, bevel=0.004)
-box('baseboard_right', 0.022, HW * 2, 0.12, TRIM, HW - TH - 0.012, 0, 0.06, bevel=0.004)
-wx = HW - TH - 0.01
-plane('window_blinds', 1.75, 2.5, BLIND, wx, -0.2, 1.42, rot=(0, radians(90), 0))
-box('blind_rail', 0.07, 2.58, 0.05, TRIM, wx - 0.02, -0.2, 2.32, bevel=0.006)
-box('window_sill', 0.1, 2.54, 0.04, TRIM, wx - 0.04, -0.2, 0.54, bevel=0.006)
+# Blender axes: x = web x, y = -web z, z = web y.  HW = back/left extents (fixed: desk, bed, chair coords),
+# RX / FZ = right (window) wall and front edge pushed out -> 4.4 x 4.1 m room.
+HW, TH, RH, RX, FZ = 1.85, 0.09, 2.5, 2.55, 2.25
+CX, CY, LX, LY = (RX - HW) / 2, -(FZ - HW) / 2, HW + RX, HW + FZ
+box('floor', LX, LY, 0.05, FLOOR, CX, CY, -0.025, bevel=0)
+box('wall_back', LX, TH, RH, WALL, CX, HW - TH / 2, RH / 2, bevel=0)
+box('wall_left', TH, LY, RH, WALL, -HW + TH / 2, CY, RH / 2, bevel=0)
+box('wall_right_low', TH, LY, 0.56, WALL, RX - TH / 2, CY, 0.28, bevel=0)
+box('wall_right_pier', TH, 0.5, RH, WALL, RX - TH / 2, HW - 0.25, RH / 2, bevel=0)
+box('baseboard_back', LX, 0.022, 0.12, TRIM, CX, HW - TH - 0.012, 0.06, bevel=0.004)
+box('baseboard_left', 0.022, LY, 0.12, TRIM, -HW + TH + 0.012, CY, 0.06, bevel=0.004)
+box('baseboard_right', 0.022, LY, 0.12, TRIM, RX - TH - 0.012, CY, 0.06, bevel=0.004)
+wx = RX - TH - 0.01
+WZ, WW, WH, WY = -0.4, 2.5, 1.75, 1.42
+GLASS = mat('glass', '1a2230', 0.05, alpha=0.25)
+box('window_frame_top', 0.08, WW + 0.12, 0.06, BLACK, wx - 0.02, WZ, WY + WH / 2 + 0.03, bevel=0.006)
+box('window_frame_bottom', 0.08, WW + 0.12, 0.06, BLACK, wx - 0.02, WZ, WY - WH / 2 - 0.03, bevel=0.006)
+box('window_frame_left', 0.08, 0.06, WH + 0.12, BLACK, wx - 0.02, WZ + WW / 2 + 0.03, WY, bevel=0.006)
+box('window_frame_right', 0.08, 0.06, WH + 0.12, BLACK, wx - 0.02, WZ - WW / 2 - 0.03, WY, bevel=0.006)
+box('window_mullion', 0.06, 0.05, WH, BLACK, wx - 0.02, WZ, WY, bevel=0.006)
+box('window_sill', 0.14, WW + 0.2, 0.04, TRIM, wx - 0.05, WZ, WY - WH / 2 - 0.08, bevel=0.006)
+plane('window_glass', WH, WW, GLASS, wx, WZ, WY, rot=(0, radians(90), 0))
+cyl('curtain_rod', 0.014, WW + 0.3, BLACK, wx - 0.09, WZ, WY + WH / 2 + 0.08, rot=(radians(90), 0, 0), verts=12, bevel=0)
+sphere('curtain_finial_1', 0.03, BLACK, wx - 0.09, WZ + WW / 2 + 0.15, WY + WH / 2 + 0.08)
+sphere('curtain_finial_2', 0.03, BLACK, wx - 0.09, WZ - WW / 2 - 0.15, WY + WH / 2 + 0.08)
 dy = HW - TH - 0.03
 box('door_casing_l', 0.05, 0.06, 2.05, TRIM, -0.78, dy, 1.02, bevel=0.006)
 box('door_casing_r', 0.05, 0.06, 2.05, TRIM, 0.02, dy, 1.02, bevel=0.006)
@@ -194,20 +205,20 @@ box('desk_side_tray', 0.56, 0.44, 0.03, DESK, DX - DW / 2 - 0.24, DY - 0.18, DZ 
 box('tray_arm', 0.34, 0.05, 0.05, BLACK, DX - DW / 2 + 0.02, DY - 0.18, DZ - 0.11, bevel=0.012)
 
 # ---------- white main monitor + side monitor on arm ----------
-mm = group('monitor_main', DX - 0.2, DY + 0.18, DZ + 0.278, rz=-0.08)
+mm = group('monitor_main', DX - 0.2, DY + 0.18, DZ + 0.278, rz=0.08)
 box('monitor_main_shell', 0.74, 0.03, 0.44, WHITE, 0, 0, 0.22, bevel=0.012, parent=mm)
 plane('screen_main', 0.71, 0.405, SCREEN_MAIN, 0, -0.017, 0.225, rot=(radians(90), 0, 0), parent=mm)
 box('monitor_main_neck', 0.07, 0.045, 0.26, WHITE, 0, 0.01, -0.13, bevel=0.014, parent=mm)
 box('monitor_main_base', 0.3, 0.22, 0.02, WHITE, 0, -0.05, -0.25, bevel=0.008, parent=mm)
 
-mon = group('monitor_side', DX + 0.62, DY + 0.12, DZ + 0.24, rz=0.42)
+mon = group('monitor_side', DX + 0.62, DY + 0.12, DZ + 0.24, rz=-0.3)
 box('monitor_side_shell', 0.56, 0.026, 0.34, BLACK, 0, 0, 0.17, bevel=0.012, parent=mon)
 plane('screen_side', 0.538, 0.318, SCREEN_SIDE, 0, -0.015, 0.17, rot=(radians(90), 0, 0), parent=mon)
 box('monitor_side_vesa', 0.1, 0.03, 0.1, BLACK, 0, 0.025, 0.17, bevel=0.01, parent=mon)
 cyl('monitor_arm_pole', 0.018, 0.5, BLACK, DX + 0.78, DY + 0.3, DZ + 0.27, verts=20)
 cyl('monitor_arm_ring', 0.022, 0.05, RED, DX + 0.78, DY + 0.3, DZ + 0.36, verts=20)
 cyl('monitor_arm_clamp', 0.03, 0.04, BLACK, DX + 0.78, DY + 0.3, DZ + 0.04, verts=20)
-box('monitor_arm_horizontal', 0.26, 0.03, 0.03, BLACK, DX + 0.7, DY + 0.22, DZ + 0.41, rot=(0, 0, 0.6), bevel=0.01)
+box('monitor_arm_horizontal', 0.26, 0.03, 0.03, BLACK, DX + 0.7, DY + 0.21, DZ + 0.41, rot=(0, 0, 0.85), bevel=0.01)
 
 # ---------- laptops ----------
 def laptop(name, w, d, m, x, y, z, rz, open_rad, screen_mat):
@@ -222,26 +233,26 @@ def laptop(name, w, d, m, x, y, z, rz, open_rad, screen_mat):
     box(name + '_lid_shell', w, 0.012, L, m, 0, 0, L / 2, bevel=0.005, parent=lid)
     plane(name + '_screen' if screen_mat is not SCREEN_LAP else 'screen_laptop', w - 0.03, L - 0.03, screen_mat, 0, -0.008, L / 2, rot=(radians(90), 0, 0), parent=lid)
     return g
-laptop('laptop_thinkpad', 0.33, 0.23, BLACK, DX - 0.16, DY - 0.17, DZ + 0.025, -0.05, 1.85, SCREEN_LAP)
-laptop('laptop_hp', 0.34, 0.24, SILVER, DX - DW / 2 - 0.24, DY - 0.2, DZ - 0.08, -0.62, 1.78, SCREEN_SIDE)
+laptop('laptop_thinkpad', 0.33, 0.23, BLACK, DX - 0.16, DY - 0.17, DZ + 0.025, 0.05, 1.85, SCREEN_LAP)
+laptop('laptop_hp', 0.34, 0.24, SILVER, DX - DW / 2 - 0.24, DY - 0.2, DZ - 0.08, 0.62, 1.78, SCREEN_SIDE)
 
 # ---------- desk clutter (from the photos) ----------
 TOP = DZ + 0.0175
-box('mousepad_red', 0.24, 0.2, 0.004, RED, DX + 0.3, DY - 0.16, TOP + 0.002, rot=(0, 0, 0.08), bevel=0.003)
-box('mousepad_stripe', 0.04, 0.15, 0.005, PAPER, DX + 0.245, DY - 0.16, TOP + 0.004, rot=(0, 0, 0.08), bevel=0)
-sphere('mouse', 0.046, BLACK, DX + 0.31, DY - 0.16, TOP + 0.04, scale=(0.7, 1.15, 0.85))
-pup = group('notebook_puppies', DX + 0.13, DY - 0.24, TOP, rz=-0.1)
+box('mousepad_red', 0.24, 0.2, 0.004, RED, DX + 0.3, DY - 0.16, TOP + 0.002, rot=(0, 0, -0.08), bevel=0.003)
+box('mousepad_stripe', 0.04, 0.15, 0.005, PAPER, DX + 0.245, DY - 0.16, TOP + 0.004, rot=(0, 0, -0.08), bevel=0)
+m_ = sphere('mouse', 0.046, BLACK, DX + 0.31, DY - 0.16, TOP + 0.04, scale=(0.7, 1.15, 0.85)); m_.rotation_euler = (0, 0.35, 0)
+pup = group('notebook_puppies', DX + 0.13, DY - 0.24, TOP, rz=0.1)
 box('pup_pages', 0.11, 0.15, 0.018, PAPER, 0, 0, 0.009, bevel=0.004, parent=pup)
 for i, (m, px, py) in enumerate(((TEAL, -0.026, 0.036), (YELLOW, 0.026, 0.036), (RED, -0.026, -0.036), (NAVY, 0.026, -0.036))):
     box(f'pup_panel_{i+1}', 0.05, 0.068, 0.002, m, px, py, 0.019, bevel=0, parent=pup)
 for i in range(9):
     torus(f'pup_spiral_{i+1}', 0.006, 0.0012, STEEL, -0.048 + i * 0.012, 0.077, 0.014, rot=(0, radians(90), 0), parent=pup)
-tn = group('notebook_teal', DX + 0.62, DY - 0.15, TOP, rz=0.1)
+tn = group('notebook_teal', DX + 0.62, DY - 0.15, TOP, rz=-0.1)
 box('teal_nb_pages', 0.2, 0.27, 0.022, PAPER, 0, 0, 0.011, bevel=0.004, parent=tn)
 box('teal_nb_cover', 0.19, 0.26, 0.003, TEAL, 0, 0, 0.0235, bevel=0, parent=tn)
 for i in range(14):
     torus(f'teal_spiral_{i+1}', 0.008, 0.0012, BLACK, -0.085 + i * 0.013, 0.137, 0.014, rot=(0, radians(90), 0), parent=tn)
-duck = group('duck_figure', DX + 0.34, DY + 0.16, TOP, rz=0.4)
+duck = group('duck_figure', DX + 0.34, DY + 0.16, TOP, rz=-0.4)
 for i, (fx, fy) in enumerate(((-0.018, -0.022), (0.018, -0.004))):
     sphere(f'duck_foot_{i+1}', 0.02, ORANGE, fx, fy, 0.006, scale=(1, 1.5, 0.35), parent=duck)
 sphere('duck_body', 0.036, WHITE, 0, 0, 0.05, scale=(1, 0.95, 1.1), parent=duck)
@@ -249,37 +260,37 @@ sphere('duck_shirt', 0.037, SKY, 0, 0, 0.075, scale=(1.02, 0.98, 0.7), parent=du
 box('duck_bow', 0.03, 0.012, 0.014, RED, 0, -0.03, 0.09, bevel=0.003, parent=duck)
 sphere('duck_head', 0.03, WHITE, 0, -0.008, 0.128, parent=duck)
 sphere('duck_bill', 0.02, ORANGE, 0, -0.038, 0.12, scale=(1.1, 1.4, 0.5), parent=duck)
-cyl('duck_hat', 0.026, 0.016, NAVY, 0, -0.002, 0.155, r2=0.03, rot=(-0.2, 0, 0), verts=18, parent=duck)
+cyl('duck_hat', 0.026, 0.016, NAVY, 0, -0.002, 0.155, r2=0.03, rot=(0.2, 0, 0), verts=18, parent=duck)
 for i, sg in enumerate((-1, 1)):
     cyl(f'duck_arm_{i+1}', 0.008, 0.046, SKY, sg * 0.038, -0.006, 0.075, rot=(0, -sg * 1.2, 0), verts=10, bevel=0, parent=duck)
-hp = group('headphones', DX + 0.52, DY + 0.1, TOP, rz=-0.5)
+hp = group('headphones', DX + 0.52, DY + 0.1, TOP, rz=0.5)
 torus('headphone_band', 0.075, 0.009, NAVY, 0, 0, 0.02, parent=hp)
 for i, (cx, cy) in enumerate(((-0.07, -0.03), (0.07, 0.03))):
     cyl(f'headphone_cup_{i+1}', 0.038, 0.03, NAVY, cx, cy, 0.018, rot=(0, radians(90), 0), verts=24, parent=hp)
     torus(f'headphone_pad_{i+1}', 0.026, 0.011, SKY, cx + (0.016 if i == 0 else -0.016), cy, 0.018, rot=(0, radians(90), 0), parent=hp)
-box('cards_box', 0.065, 0.09, 0.02, LIME, DX + 0.45, DY + 0.02, TOP + 0.01, rot=(0, 0, -0.35), bevel=0.003)
-box('cards_box_band', 0.066, 0.02, 0.021, RED, DX + 0.45, DY + 0.02, TOP + 0.01, rot=(0, 0, -0.35), bevel=0)
-ck = group('alarm_clock', DX + 0.7, DY + 0.2, TOP, rz=0.3)
+box('cards_box', 0.065, 0.09, 0.02, LIME, DX + 0.45, DY + 0.02, TOP + 0.01, rot=(0, 0, 0.35), bevel=0.003)
+box('cards_box_band', 0.066, 0.02, 0.021, RED, DX + 0.45, DY + 0.02, TOP + 0.01, rot=(0, 0, 0.35), bevel=0)
+ck = group('alarm_clock', DX + 0.7, DY + 0.2, TOP, rz=-0.3)
 cyl('clock_body', 0.045, 0.035, BLACK, 0, 0, 0.055, rot=(radians(90), 0, 0), verts=28, parent=ck)
 cyl('clock_face', 0.037, 0.002, CREAM, 0, -0.0185, 0.055, rot=(radians(90), 0, 0), verts=28, bevel=0, parent=ck)
 box('clock_hand_h', 0.003, 0.001, 0.02, BLACK, 0, -0.02, 0.064, bevel=0, parent=ck)
 box('clock_hand_m', 0.003, 0.001, 0.03, BLACK, 0.01, -0.0205, 0.06, rot=(0, 1.2, 0), bevel=0, parent=ck)
 for i, sg in enumerate((-1, 1)):
     sphere(f'clock_bell_{i+1}', 0.02, BLACK, sg * 0.028, 0, 0.105, parent=ck)
-    cyl(f'clock_foot_{i+1}', 0.004, 0.02, CHROME, sg * 0.03, -0.006, 0.01, rot=(0, sg * 0.4, 0), verts=8, bevel=0, parent=ck)
+    cyl(f'clock_foot_{i+1}', 0.004, 0.02, CHROME, sg * 0.03, -0.006, 0.01, rot=(0, -sg * 0.4, 0), verts=8, bevel=0, parent=ck)
 torus('clock_handle', 0.02, 0.003, CHROME, 0, 0, 0.11, rot=(radians(90), 0, 0), parent=ck)
 cyl('spray_can', 0.028, 0.15, NAVY, DX + 0.16, DY + 0.12, TOP + 0.075, verts=24)
 cyl('spray_cap', 0.026, 0.02, BLACK, DX + 0.16, DY + 0.12, TOP + 0.16, verts=24)
-box('bike_light', 0.03, 0.07, 0.02, BLACK, DX + 0.56, DY - 0.02, TOP + 0.01, rot=(0, 0, -0.6), bevel=0.006)
-box('bike_light_lens', 0.028, 0.02, 0.012, RED, DX + 0.575, DY - 0.048, TOP + 0.012, rot=(0, 0, -0.6), bevel=0)
+box('bike_light', 0.03, 0.07, 0.02, BLACK, DX + 0.56, DY - 0.02, TOP + 0.01, rot=(0, 0, 0.6), bevel=0.006)
+box('bike_light_lens', 0.028, 0.02, 0.012, RED, DX + 0.575, DY - 0.048, TOP + 0.012, rot=(0, 0, 0.6), bevel=0)
 cyl('cup_holder', 0.04, 0.09, BLACK, DX - 0.52, DY + 0.08, TOP + 0.045, verts=24)
 for i, c in enumerate(('e8bf34', '3fa3a8', 'e2557f', 'f2f1ee')):
     cyl(f'pen_{i+1}', 0.005, 0.15, mat(f'pen_{i+1}', c, 0.5), DX - 0.52 + (i - 1.5) * 0.012, DY + 0.08, TOP + 0.11,
         rot=(0.1 * (i - 1.5), 0.12 * (i - 1.5), 0), verts=8, bevel=0)
-box('card_red', 0.1, 0.14, 0.006, RED, DX - 0.02, DY + 0.02, TOP + 0.003, rot=(0, 0, 0.3), bevel=0.003)
+box('card_red', 0.1, 0.14, 0.006, RED, DX - 0.02, DY + 0.02, TOP + 0.003, rot=(0, 0, -0.3), bevel=0.003)
 
 # ---------- 3-shade floor lamp with vine ----------
-lamp = group('floor_lamp', HW - 0.42, 0.62, 0)
+lamp = group('floor_lamp', RX - 0.42, 0.62, 0)
 cyl('lamp_base', 0.17, 0.025, BLACK, 0, 0, 0.0125, r2=0.15, verts=32, parent=lamp)
 cyl('lamp_pole', 0.017, 2.0, BLACK, 0, 0, 1.0, verts=20, parent=lamp)
 for i, (sz, ang, tilt) in enumerate(((1.72, 0.5, 0.95), (1.42, 2.5, 0.8), (1.12, 4.4, 1.0))):
@@ -294,12 +305,12 @@ for i in range(26):
            scale=(1, 0.7, 0.2), parent=lamp)
 
 # ---------- mesh office chair ----------
-ch = group('chair', 0.5, 0.28, 0, rz=0.35)
+ch = group('chair', 0.5, 0.28, 0, rz=-0.35)
 for i in range(5):
     a = i / 5 * pi * 2 + 0.5
-    box(f'chair_base_arm_{i+1}', 0.32, 0.06, 0.045, BLACK, cos(a) * 0.16, sin(a) * 0.16, 0.085, rot=(0, 0, a), bevel=0.016, parent=ch)
-    torus(f'chair_caster_{i+1}', 0.027, 0.013, BLACK, cos(a) * 0.31, sin(a) * 0.31, 0.042, rot=(radians(90), 0, a), parent=ch)
-    cyl(f'chair_caster_fork_{i+1}', 0.011, 0.05, BLACK, cos(a) * 0.31, sin(a) * 0.31, 0.086, verts=12, bevel=0, parent=ch)
+    box(f'chair_base_arm_{i+1}', 0.32, 0.06, 0.045, BLACK, cos(a) * 0.16, -sin(a) * 0.16, 0.085, rot=(0, 0, -a), bevel=0.016, parent=ch)
+    torus(f'chair_caster_{i+1}', 0.027, 0.013, BLACK, cos(a) * 0.31, -sin(a) * 0.31, 0.042, rot=(radians(90), 0, -a + pi / 2), parent=ch)
+    cyl(f'chair_caster_fork_{i+1}', 0.011, 0.05, BLACK, cos(a) * 0.31, -sin(a) * 0.31, 0.086, verts=12, bevel=0, parent=ch)
 cyl('chair_hub', 0.08, 0.055, BLACK, 0, 0, 0.1, r2=0.06, verts=24, parent=ch)
 cyl('chair_gas_lift', 0.026, 0.26, STEEL, 0, 0, 0.26, verts=20, parent=ch)
 cyl('chair_lift_sleeve', 0.046, 0.13, BLACK, 0, 0, 0.19, r2=0.042, verts=20, parent=ch)
@@ -331,6 +342,13 @@ for i in range(14):
     box(f'bed_slat_{i+1}', BW - 0.06, 0.06, 0.018, SLAT, 0, -BL / 2 + 0.1 + i * (BL - 0.2) / 13, BH - 0.01, bevel=0.003, parent=bed)
 box('bed_mattress', BW - 0.1, BL - 0.12, 0.12, PAPER, 0, 0, BH + 0.09, bevel=0.04, parent=bed)
 box('bed_duvet', BW - 0.12, 1.2, 0.08, LIME, 0, -0.25, BH + 0.18, bevel=0.04, parent=bed)
+box('bed_pillow', 0.52, 0.32, 0.1, WHITE, 0, BL / 2 - 0.3, BH + 0.2, bevel=0.04, parent=bed)
+# clip-on reading light on the head-end rail (head = back wall end)
+BULB = mat('reading_light_bulb', 'ffe2b0', 0.4, emit='ffc98a', strength=14.0)
+box('bed_light_clip', 0.05, 0.04, 0.06, BLACK, -BW / 2 + 0.14, BL / 2 - 0.05, BH + GH + 0.02, bevel=0.01, parent=bed)
+cyl('bed_light_arm', 0.006, 0.2, BLACK, -BW / 2 + 0.2, BL / 2 - 0.12, BH + GH + 0.13, rot=(0.5, 0.6, 0), verts=10, bevel=0, parent=bed)
+cyl('bed_light_head', 0.045, 0.06, BLACK, -BW / 2 + 0.27, BL / 2 - 0.2, BH + GH + 0.2, r2=0.03, rot=(0.9, 0.5, 0), verts=18, bevel=0, parent=bed)
+cyl('bed_light_bulb', 0.028, 0.004, BULB, -BW / 2 + 0.285, BL / 2 - 0.225, BH + GH + 0.175, rot=(0.9, 0.5, 0), verts=18, bevel=0, parent=bed)
 box('bed_rail_side_r', 0.03, BL, 0.03, FRAME, BW / 2, 0, BH + GH, bevel=0.012, parent=bed)
 box('bed_rail_side_l', 0.03, BL, 0.03, FRAME, -BW / 2, 0, BH + GH, bevel=0.012, parent=bed)
 box('bed_rail_end_1', BW, 0.03, 0.03, FRAME, 0, -BL / 2, BH + GH, bevel=0.012, parent=bed)
@@ -345,14 +363,13 @@ for i, py in enumerate((BL / 2 + 0.01, -BL / 2 - 0.01, 0)):
 box('bed_pegboard', BW - 0.06, 0.015, 0.55, PEG, 0, BL / 2 - 0.03, 0.95, bevel=0.004, parent=bed)
 box('bed_pegboard_shelf', BW - 0.1, 0.12, 0.02, FRAME, 0, BL / 2 - 0.09, 0.68, bevel=0.005, parent=bed)
 box('bed_pegboard_cup', 0.06, 0.06, 0.09, FRAME, -0.3, BL / 2 - 0.07, 1.02, bevel=0.02, parent=bed)
-lad = group('bed_ladder', 0.1, -(BL / 2 + 0.05), 0, parent=bed); lad.rotation_euler = (-0.17, 0, 0)
-cyl('ladder_rail_1', 0.018, 1.95, FRAME, -0.2, 0, 0.975, verts=14, bevel=0, parent=lad)
-cyl('ladder_rail_2', 0.018, 1.95, FRAME, 0.2, 0, 0.975, verts=14, bevel=0, parent=lad)
+lad = group('bed_ladder', BW / 2 + 0.36, -0.35, 0, parent=bed); lad.rotation_euler = (0, -0.17, 0)
+cyl('ladder_rail_1', 0.018, 1.95, FRAME, 0, 0.2, 0.975, verts=14, bevel=0, parent=lad)
+cyl('ladder_rail_2', 0.018, 1.95, FRAME, 0, -0.2, 0.975, verts=14, bevel=0, parent=lad)
 for i in range(6):
-    cyl(f'ladder_step_{i+1}', 0.015, 0.4, FRAME, 0, 0, 0.25 + i * 0.29, rot=(0, radians(90), 0), verts=12, bevel=0, parent=lad)
-box('clothes_jacket', 0.36, 0.06, 0.55, BLACK, 0.1, -(BL / 2 + 0.08), BH + 0.25, rot=(-0.17, 0, 0), bevel=0.03, parent=bed)
-box('clothes_khaki', 0.2, 0.05, 0.42, CREAM, 0.25, -(BL / 2 + 0.12), BH + 0.12, rot=(-0.17, 0, 0), bevel=0.025, parent=bed)
-box('clothes_towel', 0.05, 0.22, 0.4, WHITE, BW / 2 + 0.04, -0.55, BH - 0.3, bevel=0.02, parent=bed)
+    cyl(f'ladder_step_{i+1}', 0.015, 0.4, FRAME, 0, 0, 0.25 + i * 0.29, rot=(radians(90), 0, 0), verts=12, bevel=0, parent=lad)
+box('clothes_jacket', 0.06, 0.36, 0.55, BLACK, BW / 2 + 0.07, 0.45, BH + 0.25, rot=(0, 0.1, 0), bevel=0.03, parent=bed)
+box('clothes_khaki', 0.05, 0.2, 0.42, CREAM, BW / 2 + 0.08, 0.72, BH + 0.12, rot=(0, 0.08, 0), bevel=0.025, parent=bed)
 box('kids_chair_seat', 0.32, 0.3, 0.03, TEAL, 0.05, 0.55, 0.36, bevel=0.014, parent=bed)
 box('kids_chair_back', 0.3, 0.03, 0.3, TEAL, 0.05, 0.7, 0.53, rot=(0.15, 0, 0), bevel=0.014, parent=bed)
 cyl('kids_chair_post', 0.02, 0.3, WHITE, 0.05, 0.55, 0.19, verts=14, bevel=0, parent=bed)
@@ -371,42 +388,54 @@ box('toy_bin_blue', 0.28, 0.2, 0.03, SKY, -0.25, BL / 2 - 0.12, 0.985, bevel=0.0
 box('bed_rug', BW + 0.3, 1.3, 0.012, RUG, 0.2, -0.1, 0.006, bevel=0.004, parent=bed)
 
 # ---------- floor extras ----------
-rug = cyl('rug', 1.05, 0.014, RUG, 0.25, -0.75, 0.007, verts=48, bevel=0.005)
-rug.scale = (1.25, 0.95, 1)
+rug = cyl('rug', 1.05, 0.014, RUG, 0.55, -0.9, 0.007, verts=48, bevel=0.005)
+rug.scale = (1.45, 1.05, 1)
 bb = group('basketball', DX + 0.55, DY - 0.3, 0)
 sphere('basketball_body', 0.12, TEAL, 0, 0, 0.12, parent=bb)
 torus('basketball_seam_1', 0.12, 0.006, NAVY, 0, 0, 0.12, parent=bb)
 torus('basketball_seam_2', 0.12, 0.006, NAVY, 0, 0, 0.12, rot=(radians(90), 0, 0.6), parent=bb)
 torus('basketball_seam_3', 0.12, 0.004, WHITE, 0, 0, 0.12, rot=(0.5, 1.2, 0), parent=bb)
-cyl('waste_basket', 0.12, 0.26, TEAL, HW - 0.36, 0.06, 0.13, r2=0.15, verts=28)
-box('lego_bin', 0.3, 0.2, 0.16, YELLOW, HW - 0.3, -0.95, 0.62, bevel=0.02)
+cyl('waste_basket', 0.12, 0.26, TEAL, RX - 0.36, 0.06, 0.13, r2=0.15, verts=28)
+box('lego_bin', 0.3, 0.2, 0.16, YELLOW, RX - 0.3, -1.1, 0.62, bevel=0.02)
 box('step_stool_top', 0.3, 0.2, 0.05, SKY, -0.5, -1.42, 0.24, bevel=0.02)
 for i, sg in enumerate((-1, 1)):
     box(f'step_stool_leg_{i+1}', 0.06, 0.18, 0.24, PINK, -0.5 + sg * 0.1, -1.42, 0.12, bevel=0.02)
-box('backpack', 0.3, 0.2, 0.4, BLACK, -0.95, -1.25, 0.2, rot=(0, 0, -0.4), bevel=0.06, seg=4)
+box('backpack', 0.3, 0.2, 0.4, BLACK, -0.95, -1.25, 0.2, rot=(0, 0, 0.4), bevel=0.06, seg=4)
 
-# ---------- lights ----------
-def light(name, kind, x, y, z, energy, color=(1, 1, 1), rot=(0, 0, 0), size=1.0, size_y=None):
+# ---------- LED strips (visible glow sources) ----------
+LED_RED = mat('led_red', 'ff2a4a', 0.4, emit='ff2a4a', strength=12.0)
+LED_PURPLE = mat('led_purple', '8a4dff', 0.4, emit='8a4dff', strength=10.0)
+box('led_strip_desk', DW - 0.1, 0.012, 0.012, LED_RED, DX, DY + DD / 2 - 0.02, DZ - 0.03, bevel=0)
+box('led_strip_bed', 0.012, BL - 0.1, 0.012, LED_PURPLE, -HW + 0.62 + BW / 2, 0.1, BH - 0.05, bevel=0)
+
+# ---------- lights: dim night room, neon accents ----------
+def light(name, kind, x, y, z, energy, color=(1, 1, 1), rot=(0, 0, 0), size=1.0, size_y=None, radius=0.1):
     bpy.ops.object.light_add(type=kind, location=(x, y, z), rotation=rot)
     l = bpy.context.active_object; l.name = name
     l.data.energy = energy; l.data.color = color
     if kind == 'AREA':
         l.data.size = size
         if size_y: l.data.shape = 'RECTANGLE'; l.data.size_y = size_y
+    if kind == 'POINT': l.data.shadow_soft_size = radius
     return l
-light('window_light', 'AREA', HW - 0.25, -0.2, 1.42, 120, srgb('fff1dc'), rot=(0, radians(90), 0), size=1.7, size_y=2.4)
-light('ceiling_fill', 'AREA', 0.2, 0, 2.45, 40, srgb('f5f3ee'), size=3.0)
-sun = light('sun', 'SUN', 3, -1.5, 3, 0.7, srgb('ffe9c4'))
-sun.rotation_euler = (Vector((-1, 0.45, -0.7))).to_track_quat('-Z', 'Y').to_euler()
+light('moon_window', 'AREA', RX - 0.25, WZ, WY, 18, srgb('9fb6e0'), rot=(0, radians(90), 0), size=1.7, size_y=2.4)
+light('ceiling_fill', 'AREA', CX, CY, 2.45, 8, srgb('c9cfe0'), size=3.6)
+light('neon_red_1', 'POINT', DX - 0.3, DY + 0.28, DZ + 0.05, 45, srgb('ff2a4a'), radius=0.25)
+light('neon_red_2', 'POINT', DX + 0.5, DY + 0.28, DZ + 0.05, 32, srgb('ff2a4a'), radius=0.25)
+light('neon_blue', 'POINT', DX - 0.1, DY - 0.35, DZ + 0.35, 22, srgb('3d8dff'), radius=0.3)
+light('neon_purple', 'POINT', -HW + 0.62, 0.1, 1.3, 28, srgb('8a4dff'), radius=0.35)
+light('bed_reading_light', 'POINT', -HW + 0.62 - 0.15, 0.1 + BL / 2 - 0.35, BH + GH + 0.1, 12, srgb('ffc98a'), radius=0.05)
+for i, (sz, ang) in enumerate(((1.72, 0.5), (1.42, 2.5), (1.12, 4.4))):
+    light(f'lamp_light_{i+1}', 'POINT', RX - 0.42 + cos(ang) * 0.2, 0.62 - sin(ang) * 0.2, sz - 0.12, 14, srgb('ffb347'), radius=0.08)
 w = sc.world or bpy.data.worlds.new('World'); sc.world = w; w.use_nodes = True
 bg = w.node_tree.nodes.get('Background')
-bg.inputs['Color'].default_value = (*srgb('d9d6d0'), 1); bg.inputs['Strength'].default_value = 0.2
+bg.inputs['Color'].default_value = (*srgb('141a2a'), 1); bg.inputs['Strength'].default_value = 0.35
 sc.view_settings.view_transform = 'Standard'  # preview what the bake will actually store
 
 # ---------- camera ----------
-bpy.ops.object.camera_add(location=(2.0, -4.8, 2.9))
+bpy.ops.object.camera_add(location=(2.6, -5.4, 3.1))
 cam = bpy.context.active_object; cam.name = 'preview_camera'
-cam.rotation_euler = (Vector((0.1, 0.3, 0.9)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+cam.rotation_euler = (Vector((0.35, 0.0, 0.9)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
 cam.data.lens = 30; sc.camera = cam
 sc.cycles.samples = 128; sc.cycles.use_denoising = True
 sc.render.resolution_x, sc.render.resolution_y = 1600, 1000
