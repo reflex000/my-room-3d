@@ -557,6 +557,7 @@ room.add(chair);
 /* ============ avatar sitting on the chair (avatar.js) ============ */
 const avatar = createAvatar({ T, stage, seat: { x: chair.position.x, z: chair.position.z, rotY: chair.rotation.y } });
 room.add(avatar.group);
+avatar.setChair(chair);
 window.__avatar = avatar;
 
 /* ============ loft bed (white tube frame, grey fabric guard) ============ */
@@ -769,6 +770,26 @@ try {
     });
     stage._ground.visible = false;
     baked.rotation.y = 0.55;
+    /* carve the office chair out of the merged props mesh so the avatar can swivel / roll it */
+    const props = baked.getObjectByName('room_props');
+    if (props && props.geometry.index) {
+      props.updateMatrix();
+      const g = props.geometry, idx = g.index.array, pos = g.attributes.position, keep = [], take = [], c = new T.Vector3();
+      const cx = chair.position.x, cz = chair.position.z;
+      for (let i = 0; i < idx.length; i += 3) {
+        c.set(0, 0, 0); for (let k = 0; k < 3; k++) c.add(new T.Vector3().fromBufferAttribute(pos, idx[i + k])); c.multiplyScalar(1 / 3).applyMatrix4(props.matrix);
+        (c.y > 0.03 && c.y < 1.35 && Math.hypot(c.x - cx, c.z - cz) < 0.42 ? take : keep).push(idx[i], idx[i + 1], idx[i + 2]);
+      }
+      if (take.length) {
+        const cg = new T.BufferGeometry(); for (const a in g.attributes) cg.setAttribute(a, g.attributes[a]); cg.setIndex(take); cg.computeBoundingSphere();
+        g.setIndex(keep); g.computeBoundingSphere();
+        const chairMesh = new T.Mesh(cg, props.material); chairMesh.name = 'chair_baked'; chairMesh.castShadow = chairMesh.receiveShadow = true;
+        chairMesh.position.copy(props.position); chairMesh.quaternion.copy(props.quaternion); chairMesh.scale.copy(props.scale);
+        const holder = new T.Group(); holder.position.set(-cx, 0, -cz); holder.add(chairMesh);
+        const pivot = new T.Group(); pivot.name = 'chair'; pivot.position.set(cx, 0, cz); pivot.rotation.y = chair.rotation.y; pivot.add(holder);
+        baked.add(pivot); avatar.setChair(pivot);
+      }
+    }
     const late = [];
     keepFromPrimitive.forEach(n => { const o = room.getObjectByName(n); if (!o) return; if (n === 'city_view' || n === 'window_backing') late.push(o); else baked.add(o); });
     stage.setObject(baked);

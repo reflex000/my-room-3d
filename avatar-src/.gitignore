@@ -1,3 +1,4 @@
 node_modules/
 *.glb
+*.fbx
 package-lock.json

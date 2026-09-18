@@ -1,0 +1,306 @@
+{
+ "idle": {
+  "duration": 2.5,
+  "frames": 76,
+  "hipsStart": [
+   0,
+   0.956,
+   0.014
+  ],
+  "hipsEnd": [
+   0,
+   0.956,
+   0.014
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "walk": {
+  "duration": 0.967,
+  "frames": 30,
+  "hipsStart": [
+   0,
+   0.946,
+   0.014
+  ],
+  "hipsEnd": [
+   0,
+   0.946,
+   0.014
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "stretch": {
+  "duration": 8.9,
+  "frames": 267,
+  "hipsStart": [
+   0.001,
+   0.959,
+   0.013
+  ],
+  "hipsEnd": [
+   0.001,
+   0.959,
+   0.013
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "climb": {
+  "duration": 0.8,
+  "frames": 24,
+  "hipsStart": [
+   0,
+   1.655,
+   0.013
+  ],
+  "hipsEnd": [
+   0,
+   1.674,
+   0.014
+  ],
+  "drift": [
+   -0.001,
+   0.462,
+   0.025
+  ]
+ },
+ "drink": {
+  "duration": 8.9,
+  "frames": 267,
+  "hipsStart": [
+   -0.016,
+   0.958,
+   0.005
+  ],
+  "hipsEnd": [
+   -0.016,
+   0.958,
+   0.005
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "lieDown": {
+  "duration": 5.767,
+  "frames": 173,
+  "hipsStart": [
+   -0.005,
+   0.801,
+   0.015
+  ],
+  "hipsEnd": [
+   0.013,
+   0.744,
+   -0.419
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "neckStretch": {
+  "duration": 3.233,
+  "frames": 97,
+  "hipsStart": [
+   0.004,
+   0.959,
+   0.01
+  ],
+  "hipsEnd": [
+   0.004,
+   0.959,
+   0.01
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "sitToType": {
+  "duration": 1.233,
+  "frames": 37,
+  "hipsStart": [
+   -0.001,
+   0.533,
+   0.031
+  ],
+  "hipsEnd": [
+   -0.001,
+   0.537,
+   0.03
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "sitIdle": {
+  "duration": 4.333,
+  "frames": 130,
+  "hipsStart": [
+   -0.001,
+   0.533,
+   0.031
+  ],
+  "hipsEnd": [
+   -0.001,
+   0.533,
+   0.031
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "sitLaugh": {
+  "duration": 8.367,
+  "frames": 251,
+  "hipsStart": [
+   -0.001,
+   0.546,
+   0.023
+  ],
+  "hipsEnd": [
+   -0.001,
+   0.546,
+   0.023
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "climbStart": {
+  "duration": 2.067,
+  "frames": 62,
+  "hipsStart": [
+   -0.015,
+   0.906,
+   0.008
+  ],
+  "hipsEnd": [
+   0,
+   1.674,
+   0.014
+  ],
+  "drift": [
+   0.956,
+   0,
+   0.372
+  ]
+ },
+ "phone": {
+  "duration": 23.6,
+  "frames": 708,
+  "hipsStart": [
+   0.001,
+   0.958,
+   0.013
+  ],
+  "hipsEnd": [
+   0.001,
+   0.958,
+   0.013
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "typeToSit": {
+  "duration": 0.967,
+  "frames": 29,
+  "hipsStart": [
+   -0.001,
+   0.533,
+   0.03
+  ],
+  "hipsEnd": [
+   -0.001,
+   0.533,
+   0.031
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "typing": {
+  "duration": 16.5,
+  "frames": 495,
+  "hipsStart": [
+   -0.001,
+   0.537,
+   0.03
+  ],
+  "hipsEnd": [
+   -0.001,
+   0.537,
+   0.03
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
+ "dance": {
+  "duration": 16.867,
+  "frames": 506,
+  "hipsStart": [
+   0,
+   0.951,
+   0.014
+  ],
+  "hipsEnd": [
+   0,
+   0.951,
+   0.014
+  ],
+  "drift": [
+   0,
+   0,
+   -0.001
+  ]
+ },
+ "wave": {
+  "duration": 0.567,
+  "frames": 17,
+  "hipsStart": [
+   0.001,
+   0.959,
+   0.014
+  ],
+  "hipsEnd": [
+   0.001,
+   0.959,
+   0.014
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ }
+}
