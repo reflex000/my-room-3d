@@ -33,10 +33,13 @@ export function createAvatar({ T, stage, seat }) {
   const fwd = new T.Vector3(Math.sin(seat.rotY), 0, Math.cos(seat.rotY));
   const SEAT = new T.Vector3(seat.x, 0, seat.z);
   const STANDPT = SEAT.clone().addScaledVector(fwd, 0.52);
+  /* loft bed: ladder leans on the room-facing side; he climbs it, steps over the rail and lies down head-to-wall */
+  const LADDER_FOOT = new T.Vector3(-0.2, 0, 0.25), LADDER_TOP = new T.Vector3(-0.56, 2.0, 0.25), BED_LIE = new T.Vector3(-1.22, 1.64, 0.5);
+  const Q_TOP = Q(0, -Math.PI / 2, 0), Q_LIE = Q(-Math.PI / 2, 0, 0);
   const SPOTS = {
     center: { p: [0.35, 1.1], face: 0.15 },
     window: { p: [1.12, 0.78], face: Math.PI / 2 },
-    bed:    { p: [-0.12, 0.95], face: -Math.PI / 2 },
+    ladder: { p: [-0.13, 0.25], face: -Math.PI / 2 },
     desk:   { p: [1.08, -0.3], face: Math.PI - 0.25, via: [[0.95, 0.4]] },
     door:   { p: [-0.05, -0.05], face: Math.PI + 0.35, via: [[0.0, 0.55]] },
   };
@@ -97,7 +100,7 @@ export function createAvatar({ T, stage, seat }) {
       }
       const a = mixer.clipAction(new T.AnimationClip(clip.name, clip.duration, tracks)); a.play(); a.setEffectiveWeight(clip.name === 'idle' ? 1 : 0); actions[clip.name] = a;
     }
-    let walkW = 0;
+    let walkW = 0, climbW = 0, lieW = 0;
 
     /* ---------- procedural poses (Euler XYZ in T-pose avatar axes; arm chain uses "hanging arm" axes) ---------- */
     const DOWN = { L: Q(0, 0, -Math.PI / 2), R: Q(0, 0, Math.PI / 2) }, DOWNi = { L: DOWN.L.clone().invert(), R: DOWN.R.clone().invert() };
@@ -130,7 +133,6 @@ export function createAvatar({ T, stage, seat }) {
       no:      { look: 1, dur: 1.9, pose: (t) => ({ head: [0.03, S(t * 9) * 0.36, 0] }) },
       shrug:   { look: 1, dur: 2.2, face: 'brow', pose: () => ({ shL: [-0.35, 0, 0.5], shR: [-0.35, 0, -0.5], elL: [-1.7, 0, 0.5], elR: [-1.7, 0, -0.5], head: [0, 0, 0.14] }) },
       dance:   { dur: 6.5, face: 'smile', pose: (t) => { const b = S(t * 7); return { torso: [0, S(t * 3.5) * 0.2, b * 0.08], head: [S(t * 7) * 0.08, S(t * 3.5) * -0.12, -b * 0.06], shL: [-0.9 - b * 0.35, 0, 0.35], elL: [-1.6, 0, 0], shR: [-0.9 + b * 0.35, 0, -0.35], elR: [-1.6, 0, 0] }; } },
-      sleep:   { needSit: 1, dur: 8, face: 'closed', pose: (t) => ({ head: [0.5 + S(t * 1.1) * 0.03, 0, 0.12], torso: [0.08 + S(t * 1.1) * 0.015, 0, 0.03] }) },
       talk:    { look: 1, dur: 3, face: 'talk', pose: (t) => ({ head: [0.02 + S(t * 5) * 0.03, S(t * 1.7) * 0.06, 0], shL: [-0.4 + S(t * 3) * 0.08, 0, 0.2], elL: [-1.5 + S(t * 3) * 0.2, 0, 0] }) },
     };
 
@@ -170,16 +172,33 @@ export function createAvatar({ T, stage, seat }) {
       else if (state === 'standing_up') onArrive = then || null;
       else if (then) then();
     }
+    let bedQueue = null;
+    /* get on our feet from wherever we are (chair, bed, mid-transition), then run `then` */
+    function ensureStanding(then) {
+      if (state === 'sit' || state === 'standing_up') standUp(then);
+      else if (state === 'sitting_down') onArrive = () => standUp(then);
+      else if (state === 'inbed') { state = 'from_bed'; transT = 0; onArrive = then || null; }
+      else if (state === 'climb_up' || state === 'to_bed') bedQueue = then || (() => {});
+      else if (state === 'from_bed' || state === 'climb_down') onArrive = then || null;
+      else if (then) then();
+    }
     function walkTo(key, then) {
       const spot = SPOTS[key]; if (!spot) return;
-      const go = () => { path = [...viaBack(), ...(spot.via || []).map(v2), v2(spot.p)]; faceAfter = spot.face; state = 'walk'; where = key; onArrive = then || null; };
-      (state === 'sit' || state === 'standing_up') ? standUp(go) : go();
+      ensureStanding(() => { path = [...viaBack(), ...(spot.via || []).map(v2), v2(spot.p)]; faceAfter = spot.face; state = 'walk'; where = key; onArrive = then || null; });
     }
     function goSit(then) {
       if (state === 'sit') { if (then) then(); return; }
-      if (state === 'standing_up') { onArrive = () => goSit(then); return; }
-      path = [...viaBack(), STANDPT.clone()]; faceAfter = seat.rotY; state = 'walk'; where = 'seat';
-      onArrive = () => { state = 'sitting_down'; transT = 0; onArrive = then || null; };
+      ensureStanding(() => {
+        path = [...viaBack(), STANDPT.clone()]; faceAfter = seat.rotY; state = 'walk'; where = 'seat';
+        onArrive = () => { state = 'sitting_down'; transT = 0; onArrive = then || null; };
+      });
+    }
+    function goBed() {
+      if (state === 'inbed' || state === 'to_bed' || state === 'climb_up') return;
+      ensureStanding(() => {
+        path = [...viaBack(), LADDER_FOOT.clone()]; faceAfter = -Math.PI / 2; state = 'walk'; where = 'ladder';
+        onArrive = () => { state = 'climb_up'; transT = 0; };
+      });
     }
     function wander() {
       const keys = Object.keys(SPOTS).filter(k => k !== where); const k = pickOne(keys);
@@ -198,6 +217,21 @@ export function createAvatar({ T, stage, seat }) {
         sitW = state === 'standing_up' ? 1 - k : k;
         rig.position.lerpVectors(STANDPT, SEAT, sitW); rig.rotation.y = seat.rotY;
         if (transT >= 1) { state = state === 'standing_up' ? 'stand' : 'sit'; const f = onArrive; onArrive = null; if (f) f(); }
+      } else if (state === 'climb_up' || state === 'climb_down') {
+        const up = state === 'climb_up';
+        transT += dt / 3.2; const k = clamp(transT, 0, 1);
+        rig.position.lerpVectors(up ? LADDER_FOOT : LADDER_TOP, up ? LADDER_TOP : LADDER_FOOT, k); rig.quaternion.copy(Q_TOP);
+        if (transT >= 1) {
+          if (up) { state = 'to_bed'; transT = 0; }
+          else { state = 'stand'; where = 'ladder'; const f = onArrive; onArrive = null; if (f) f(); }
+        }
+      } else if (state === 'to_bed' || state === 'from_bed') {
+        transT += dt / 1.4; const k = smooth(clamp(transT, 0, 1)), a = state === 'to_bed' ? k : 1 - k;
+        rig.position.lerpVectors(LADDER_TOP, BED_LIE, a); rig.quaternion.slerpQuaternions(Q_TOP, Q_LIE, a);
+        if (transT >= 1) {
+          if (state === 'to_bed') { state = 'inbed'; nextAuto = now + 45 + Math.random() * 30; say('Zzz\u2026 \ud83d\ude34', 4); if (bedQueue) { const f = bedQueue; bedQueue = null; ensureStanding(f); } }
+          else { state = 'climb_down'; transT = 0; }
+        }
       } else if (state === 'walk') {
         const tgt = path[0];
         if (!tgt) {
@@ -212,8 +246,11 @@ export function createAvatar({ T, stage, seat }) {
           if (dist <= step + 0.02) { rig.position.x = tgt.x; rig.position.z = tgt.z; path.shift(); } else rig.position.addScaledVector(tv.normalize(), step);
         }
       }
-      const wantWalk = state === 'walk' && path.length ? 1 : 0; walkW += (wantWalk - walkW) * (1 - Math.exp(-dt * 8));
-      actions.walk.setEffectiveWeight(walkW); actions.idle.setEffectiveWeight(1 - walkW); actions.walk.timeScale = 0.8;
+      const climbing = state === 'climb_up' || state === 'climb_down';
+      const wantWalk = (state === 'walk' && path.length) || climbing ? 1 : 0; walkW += (wantWalk - walkW) * (1 - Math.exp(-dt * 8));
+      actions.walk.setEffectiveWeight(walkW); actions.idle.setEffectiveWeight(1 - walkW); actions.walk.timeScale = climbing ? 0.55 : 0.8;
+      climbW += ((climbing ? 1 : 0) - climbW) * (1 - Math.exp(-dt * 8));
+      lieW += ((state === 'inbed' || state === 'to_bed' ? 1 : 0) - lieW) * (1 - Math.exp(-dt * 3));
       mixer.update(dt);
 
       /* --- sit pose over the mocap --- */
@@ -231,8 +268,20 @@ export function createAvatar({ T, stage, seat }) {
         bones.Hips.position.lerp(SIT_HIPS, sitW);
       }
 
+      /* --- climbing: arms up on the rungs, slight forward lean --- */
+      if (climbW > 0.005) {
+        const c = { shL: [-2.55 + S(now * 4.2) * 0.3, 0, 0.3], shR: [-2.55 - S(now * 4.2) * 0.3, 0, -0.3], elL: [-0.8, 0, 0], elR: [-0.8, 0, 0], torso: [0.22, 0, 0], head: [-0.35, 0, 0] };
+        for (const j in c) bones[JOINT[j]].quaternion.slerp(targetLocal(JOINT[j], c[j], tq), smooth(climbW));
+      }
+
+      /* --- lying in bed: hands on the belly, head rolled a little, slow breathing --- */
+      if (lieW > 0.005) {
+        const c = { shL: [0.12, -1.25, 0.3], shR: [0.12, 1.25, -0.3], elL: [-1.55 + S(now * 1.3) * 0.03, 0, 0], elR: [-1.55 + S(now * 1.3) * 0.03, 0, 0], head: [-0.12, 0.35, 0.08], torso: [S(now * 1.3) * 0.02, 0, 0] };
+        for (const j in c) bones[JOINT[j]].quaternion.slerp(targetLocal(JOINT[j], c[j], tq), smooth(lieW));
+      }
+
       /* --- gesture layer --- */
-      let faceMode = 'neutral', look = 0;
+      let faceMode = state === 'inbed' || state === 'to_bed' ? 'closed' : 'neutral', look = 0;
       if (gesture) {
         const t = now - gStart;
         if (t > gesture.dur) gesture = null;
@@ -260,23 +309,23 @@ export function createAvatar({ T, stage, seat }) {
       morph('eyeBlinkLeft', bl); morph('eyeBlinkRight', bl); morph('mouthSmile', face.smile); morph('browInnerUp', face.brow); morph('jawOpen', Math.max(0, face.jaw)); morph('viseme_aa', Math.max(0, face.aa)); morph('viseme_O', Math.max(0, face.oo)); morph('cheekSquintLeft', face.smile * 0.5); morph('cheekSquintRight', face.smile * 0.5);
 
       /* --- shadow, bubble, idle behaviour --- */
-      blob.position.x = rig.position.x; blob.position.z = rig.position.z; blob.material.opacity = 1 - sitW * 0.75;
+      blob.position.x = rig.position.x; blob.position.z = rig.position.z; blob.material.opacity = (1 - sitW * 0.75) * clamp(1 - rig.position.y / 0.4, 0, 1);
       if (now < bubbleUntil) {
         bones.Head.getWorldPosition(headPos); headPos.y += 0.3; headPos.project(stage._camera);
         const r = stage.getBoundingClientRect();
         bubble.style.left = (r.left + (headPos.x + 1) / 2 * r.width) + 'px'; bubble.style.top = (r.top + (1 - headPos.y) / 2 * r.height) + 'px';
         bubble.style.opacity = headPos.z < 1 ? '1' : '0';
       } else bubble.style.opacity = '0';
-      if (now > nextAuto && !gesture && (state === 'sit' || state === 'stand')) {
+      if (now > nextAuto && !gesture && (state === 'sit' || state === 'stand' || state === 'inbed')) {
         nextAuto = now + 22 + Math.random() * 18;
-        if (state === 'sit') { if (Math.random() < 0.55) wander(); else play(pickOne(['stretch', 'drink', 'phone', 'think'])); }
+        if (state === 'inbed') { say('Chalo, kaam pe wapas', 3); goSit(); }
+        else if (state === 'sit') { const r = Math.random(); if (r < 0.45) wander(); else if (r < 0.55) goBed(); else play(pickOne(['stretch', 'drink', 'phone', 'think'])); }
       }
     };
 
     /* ---------- text commands ---------- */
     const GO = [
       [/\b(window|khidki|bahar|outside|view)\b/, 'window', ['Bahar ka view dekhta hoon', 'Nice view from here 🌆']],
-      [/\b(bed|bistar|palang)\b/, 'bed', ['IKEA loft bed — solid hai', 'Bed check 🛏️']],
       [/\b(desk|monitor|setup|work|kaam|computer|pc)\b/, 'desk', ['Yeh raha mera setup 🖥️', 'Back to work…']],
       [/\b(door|darwaza|gate)\b/, 'door', ['Koi aaya kya? 🚪']],
       [/\b(come here|idhar aa|aaja|aa ja|center|front|samne|saamne|closer|paas)\b/, 'center', ['Haan bol 👀', 'Aa gaya']],
@@ -286,7 +335,6 @@ export function createAvatar({ T, stage, seat }) {
       [/\b(stretch|tired|thak|thaka|break|angdai)\b/, 'stretch', ['Aaah… needed that', 'Long day bro']],
       [/\b(drink|coffee|chai|tea|water|paani|pani|sip)\b/, 'drink', ['Chai break ☕', 'Hydration first']],
       [/\b(phone|scroll|insta|instagram|text|call|reel|reels)\b/, 'phone', ['Ek min, reply kar raha hoon…', 'Just one reel 📱']],
-      [/\b(sleep|nap|so ja|soja|sleepy|night|zzz)\b/, 'sleep', ['Zzz… 5 min bas', '😴']],
       [/\b(lol|lmao|haha+|funny|joke|laugh|hasa)\b/, 'laugh', ['Hahaha 😂', 'Sahi tha yeh']],
       [/\b(think|idea|soch|socho|hmm+|why|how|kyu|kyun|kaise)\b/, 'think', ['Hmm, let me think…', 'Sochne de 🤔']],
       [/\b(nice|cool|great|awesome|good|thumbs|like|love|badhiya|mast|sahi)\b/, 'thumbs', ['👍 Badhiya!', 'Appreciate it!']],
@@ -300,6 +348,8 @@ export function createAvatar({ T, stage, seat }) {
       const m = raw.match(/^(say|bol|bolo)\s+(.+)/i);
       if (m) { play('talk', Math.min(7, 2 + m[2].length * 0.06)); say(m[2]); return; }
       const low = raw.toLowerCase();
+      if (/\b(bed|bistar|palang|sleep|nap|so ja|soja|sleepy|night|zzz|sone)\b/.test(low)) { say(state === 'inbed' ? 'So raha hoon yaar \ud83d\ude34' : pickOne(['Thak gaya, sone jaa raha hoon \ud83d\ude34', 'Good night \ud83c\udf19', 'Bed time \ud83d\udecf\ufe0f'])); goBed(); return; }
+      if (/\b(wake|jaag|jag|utho|uth ja|get up)\b/.test(low)) { say('Uth gaya uth gaya \ud83d\ude29'); ensureStanding(); return; }
       if (/\b(sit|baith|beth|wapas|chair|kursi)\b/.test(low)) { say(state === 'sit' ? 'Baitha toh hoon 😄' : 'Theek hai, baith jaata hoon'); goSit(); return; }
       if (/\b(stand|uth|khada|get up)\b/.test(low)) { say('Uth gaya 💪'); standUp(); return; }
       if (/\b(walk|ghoom|ghum|tehel|roam|wander|chal|move)\b/.test(low)) { say('Thoda ghoom ke aata hoon 🚶'); wander(); return; }
@@ -308,7 +358,7 @@ export function createAvatar({ T, stage, seat }) {
       for (const [re, act, lines] of RULES) if (re.test(low)) { play(act); say(pickOne(lines)); return; }
       play('shrug'); say('Try: walk, window, desk, bed, sit, wave, dance, chai… or "say <anything>"', 5.5);
     };
-    api.play = play; api.say = say; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.state = () => ({ state, sitW, where });
+    api.play = play; api.say = say; api.bed = goBed; api.up = ensureStanding; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.state = () => ({ state, sitW, where });
     api.ready = true;
     setTimeout(() => api.command('hi'), 1200);
   })().catch((e) => console.warn('avatar failed to load', e));
