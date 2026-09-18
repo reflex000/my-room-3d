@@ -778,7 +778,7 @@ try {
       const cx = chair.position.x, cz = chair.position.z;
       for (let i = 0; i < idx.length; i += 3) {
         c.set(0, 0, 0); for (let k = 0; k < 3; k++) c.add(new T.Vector3().fromBufferAttribute(pos, idx[i + k])); c.multiplyScalar(1 / 3).applyMatrix4(props.matrix);
-        (c.y > 0.03 && c.y < 1.35 && Math.hypot(c.x - cx, c.z - cz) < 0.42 ? take : keep).push(idx[i], idx[i + 1], idx[i + 2]);
+        (c.y > -0.005 && c.y < 1.35 && Math.hypot(c.x - cx, c.z - cz) < 0.42 ? take : keep).push(idx[i], idx[i + 1], idx[i + 2]);
       }
       if (take.length) {
         const cg = new T.BufferGeometry(); for (const a in g.attributes) cg.setAttribute(a, g.attributes[a]); cg.setIndex(take); cg.computeBoundingSphere();
