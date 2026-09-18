@@ -376,6 +376,7 @@ export function createAvatar({ T, stage, seat }) {
       for (const [re, act, lines] of RULES) if (re.test(low)) { play(act); say(pickOne(lines)); return; }
       play('shrug'); say('Try: walk, window, desk, bed, sit, work, wave, dance, chai… or "say <anything>"', 5.5);
     };
+    api.hold = (secs) => { nextAuto = nowS() + secs; };   // keep the idle behaviour away while someone is talking to him
     api.play = play; api.say = say; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.type = goType; api.bed = goBed; api.up = ensureStanding;
     api.state = () => ({ state, where, base: base && base.getClip().name, chairYaw: +chairYaw.toFixed(2) });
     api._dbg = { clips, sampler, mixer, setBase, rest, actions };

@@ -575,6 +575,8 @@ const avatar = createAvatar({ T, stage, seat: { x: 0.5, z: -0.28, rotY: -0.35 } 
 room.add(avatar.group);
 avatar.setChair(chair);
 window.__avatar = avatar;
+/* SRE desk: chat with the avatar, job log on the main monitor, ops board on the wall (sre.js) */
+import('./sre.js').then(m => m.initSRE({ T, stage, avatar, screens })).catch(e => console.warn('sre desk failed to load', e));
 
 /* ============ loft bed (white tube frame, grey fabric guard) ============ */
 const bed = new T.Group(); bed.name = 'loft_bed';
@@ -696,7 +698,8 @@ const LINKS = [
   { test: n => n.startsWith('monitor_main') || n === 'screen_main', label: 'LG 32" Smart Monitor — view product', url: 'https://www.lg.com/ca_en/monitors/smart-monitors/32u720sa-w/' },
   { test: n => n.startsWith('laptop_hp'), label: 'HP Elite x360 1040 G11 — view product', url: 'https://www.hp.com/us-en/shop/pdp/hp-elite-x360-1040-14-inch-g11-2-in-1-notebook-pc-wolf-pro-security-edition-p-cp3m0ua-aba-1' },
   { test: n => n.startsWith('loft_bed') || n.startsWith('bed_') || n.startsWith('ladder_'), label: 'IKEA VITVAL Loft Bed — view product', url: 'https://www.ikea.com/ca/en/p/vitval-loft-bed-frame-white-light-gray-70411239/' },
-  { test: n => n.startsWith('avatar'), label: "That's me 👋 — click to say hi", action: () => avatar.command('hi') },
+  { test: n => n.startsWith('tickets_board'), label: 'Ops board — open the SRE desk', action: () => window.__sre && window.__sre.open() },
+  { test: n => n.startsWith('avatar'), label: "That's me 👋 — click to talk", action: () => (window.__sre ? window.__sre.open() : avatar.command('hi')) },
   { test: n => n.startsWith('curtain'), label: 'Click to open / close the curtains', action: () => window.__toggleCurtains() },
 ];
 const tip = document.createElement('div');
@@ -784,7 +787,7 @@ try {
     const keepFromPrimitive = ['city_view', 'window_backing', 'window_glass', 'curtain_left', 'curtain_right', 'curtain_rod', 'curtain_finial_1', 'curtain_finial_2', 'led_strip_desk', 'led_strip_bed', 'avatar'];
     baked.traverse((o) => {
       if (!o.isMesh) return;
-      if (liveMats[o.name]) { o.material = liveMats[o.name]; o.material.side = T.FrontSide; o.material.toneMapped = false; return; }
+      if (liveMats[o.name]) { o.material = liveMats[o.name]; o.material.side = T.FrontSide; o.material.toneMapped = false; if (o.material.map) { o.material.map.flipY = false; o.material.map.needsUpdate = true; } /* glTF UVs: canvas screens were upside-down on the baked meshes */ return; }
       if (o.name === 'bed_light_bulb') { o.material = readMat; return; }
       if (o.name === 'window_blinds' || o.name === 'window_glass') { o.visible = false; return; }
       const src = Array.isArray(o.material) ? o.material[0] : o.material;

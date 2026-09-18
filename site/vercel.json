@@ -26,5 +26,11 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/chat.js": {
+      "includeFiles": "skills/**",
+      "maxDuration": 30
+    }
+  }
 }
