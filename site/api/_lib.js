@@ -7,9 +7,11 @@ const MODE = process.env.SRE_MODE || 'simulated';
 const secret = () => process.env.JOB_SECRET || crypto.createHash('sha256').update('job:' + (process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || 'dev')).digest('hex');
 
 function inviteOk(code) {
-  const list = (process.env.INVITE_CODES || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (!list.length || !code) return false;
-  const c = Buffer.from(String(code).trim());
+  /* forgiving on purpose: case, stray quotes/backticks/spaces from copy-paste */
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const list = (process.env.INVITE_CODES || '').split(',').map(norm).filter(Boolean);
+  if (!list.length || !norm(code)) return false;
+  const c = Buffer.from(norm(code));
   return list.some(x => { const b = Buffer.from(x); return b.length === c.length && crypto.timingSafeEqual(b, c); });
 }
 

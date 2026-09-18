@@ -4,7 +4,7 @@
 
 export function initSRE({ T, stage, avatar, screens }) {
   const LS = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
-  let invite = LS.get('sre.invite', ''), jobs = LS.get('sre.jobs', []), status = {}, messages = [], busy = false, open = false, polling = null, announced = new Set(LS.get('sre.announced', []));
+  let pending = null, invite = LS.get('sre.invite', ''), jobs = LS.get('sre.jobs', []), status = {}, messages = [], busy = false, open = false, polling = null, announced = new Set(LS.get('sre.announced', []));
   const av = (fn, ...a) => { try { if (avatar && avatar.ready && typeof avatar[fn] === 'function') return avatar[fn](...a); } catch (e) {} };
 
   /* ---------- styles + DOM ---------- */
@@ -52,7 +52,14 @@ export function initSRE({ T, stage, avatar, screens }) {
     if (!invite) {
       const i = el('input'); i.placeholder = 'Invite code'; i.autocomplete = 'off'; i.setAttribute('aria-label', 'Invite code');
       const b = el('button', null, 'Enter'); b.type = 'button';
-      const go = () => { const v = i.value.trim(); if (!v) return; invite = v; LS.set('sre.invite', invite); renderFoot(); if (!messages.length) greet(); };
+      /* verify the code right away (empty chat → 400 means the gate let us through, 401 means wrong code) */
+      const go = async () => {
+        const v = i.value.trim(); if (!v || b.disabled) return; b.disabled = true; b.textContent = '…';
+        let ok = false; try { const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite: v, messages: [] }) }); ok = r.status !== 401; } catch (e) {}
+        if (!ok) { b.disabled = false; b.textContent = 'Enter'; addMsg('system', 'That code did not match — check for typos (it looks like guest-xxxxxxxx).'); return; }
+        invite = v; LS.set('sre.invite', invite); addMsg('system', 'Code accepted ✓'); renderFoot(); if (!messages.length) greet();
+        if (pending) { const t = pending; pending = null; send(t); }
+      };
       b.onclick = go; i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
       foot.append(i, b); return;
     }
@@ -75,7 +82,7 @@ export function initSRE({ T, stage, avatar, screens }) {
       const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token) }) });
       const data = await r.json().catch(() => ({}));
       dots.remove();
-      if (r.status === 401) { invite = ''; LS.set('sre.invite', ''); messages.pop(); addMsg('system', 'That invite code did not work. Ask Sid for one.'); }
+      if (r.status === 401) { invite = ''; LS.set('sre.invite', ''); messages.pop(); pending = text; addMsg('system', 'That invite code did not work — enter it again below and I will resend your message.'); }
       else if (!r.ok) { messages.pop(); addMsg('system', 'Hmm, connection issue (' + (data.error || r.status) + '). Try again.'); av('play', 'shrug'); }
       else {
         badge.textContent = data.mode || 'simulated';
