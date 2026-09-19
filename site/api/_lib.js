@@ -43,11 +43,13 @@ const ENUMS = {
   region: ['canadacentral', 'canadaeast', 'westus2', 'eastus'],
   network: ['private', 'public_ssh'],
   observability: ['none', 'basic', 'full'],
+  access: ['managed', 'ssh_key'],
 };
 const SECRETISH = /(password|passwd|secret|BEGIN [A-Z ]*PRIVATE KEY|sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{12,})/i;
-function validateAzureVm(p) {
+function validateAzureVm(p, ctx = {}) {
   const errors = [], out = {};
   if (!p || typeof p !== 'object') return { errors: ['params missing'] };
+  p = { access: p.ssh_public_key ? 'ssh_key' : 'managed', ...p };   // the SRE decides access; visitors are not asked for keys
   const str = (k, max, req) => {
     const v = p[k] == null ? '' : String(p[k]).trim();
     if (req && !v) errors.push(`${k} is required`);
@@ -60,11 +62,12 @@ function validateAzureVm(p) {
   const ttl = Number(p.ttl_days); if (!Number.isInteger(ttl) || ttl < 1 || ttl > 14) errors.push('ttl_days must be an integer 1–14'); out.ttl_days = ttl;
   out.backup = !!p.backup;
   if (out.network === 'public_ssh') {
-    const ip = String(p.source_ip || '').trim();
-    if (!/^(\d{1,3}\.){3}\d{1,3}(\/(3[0-2]|[12]?\d))?$/.test(ip) || ip.startsWith('0.0.0.0')) errors.push("source_ip must be the visitor's public IPv4 (never 0.0.0.0/0)");
+    /* looking up the visitor's IP is the SRE's job, not theirs: take it from the connection */
+    const ip = String(ctx.ip || p.source_ip || '').trim();
+    if (!/^(\d{1,3}\.){3}\d{1,3}(\/(3[0-2]|[12]?\d))?$/.test(ip) || ip.startsWith('0.0.0.0')) errors.push('could not determine a public IPv4 for the visitor — use network: private, or ask them to retry from an IPv4 connection');
     out.source_ip = ip;
   }
-  if (out.os && out.os.startsWith('ubuntu')) {
+  if (out.access === 'ssh_key') {
     const key = String(p.ssh_public_key || '').trim();
     if (/PRIVATE KEY/.test(key)) errors.push('that is a PRIVATE key — never share it; send the .pub file contents');
     else if (!/^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp\d+) [A-Za-z0-9+/=]{40,}( .*)?$/.test(key)) errors.push('ssh_public_key must be an SSH PUBLIC key (ssh-ed25519 … / ssh-rsa …)');

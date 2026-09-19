@@ -94,6 +94,25 @@
    0
   ]
  },
+ "laugh": {
+  "duration": 9.8,
+  "frames": 294,
+  "hipsStart": [
+   -0.002,
+   0.947,
+   0.018
+  ],
+  "hipsEnd": [
+   -0.002,
+   0.947,
+   0.018
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ]
+ },
  "lieDown": {
   "duration": 5.767,
   "frames": 173,
@@ -149,6 +168,29 @@
    0,
    0,
    0
+  ]
+ },
+ "sitDrink": {
+  "duration": 10.2,
+  "frames": 307,
+  "hipsStart": [
+   0,
+   0.948,
+   0.015
+  ],
+  "hipsEnd": [
+   -0.305,
+   0.477,
+   2.657
+  ],
+  "drift": [
+   0,
+   0,
+   0
+  ],
+  "subclip": [
+   5,
+   15.2
   ]
  },
  "sitIdle": {

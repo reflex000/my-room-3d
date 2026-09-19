@@ -119,7 +119,7 @@ export function createAvatar({ T, stage, seat }) {
     /* gestures: either a mocap clip sampled on the upper body, or a procedural pose */
     const GESTURES = {
       wave:    { look: 1, dur: 3.0, face: 'smile', pose: (t) => ({ shR: [0, 0, -2.45], elR: [0, 0, -0.55 + S(t * 9) * 0.45], head: [0, 0, -0.08] }) },
-      drink:   { clip: 'drink', dur: 5.2, prop: 'mug' },
+      drink:   { clip: 'drink', dur: 5.2, prop: 'bottle' },
       stretch: { clip: 'stretch', dur: 6, face: 'closed' },
       neck:    { clip: 'neckStretch', dur: 3.2, face: 'closed' },
       phone:   { clip: 'phone', dur: 8, prop: 'phone', from: 1.5 },
@@ -132,6 +132,15 @@ export function createAvatar({ T, stage, seat }) {
       talk:    { look: 1, dur: 3, face: 'talk', pose: (t) => ({ head: [0.02 + S(t * 5) * 0.03, S(t * 1.7) * 0.06, 0] }) },
     };
 
+    /* full-body takes: a seated and/or standing mocap clip played as a one-shot base, then back to the posture's loop.
+       `win` = seconds (clip time) during which the hand prop is out. `needStand`: he gets up for it, like a person would. */
+    const FULL = {
+      drink:   { sit: 'sitDrink', stand: 'drink', from: { sitDrink: 0.8 }, win: { sitDrink: [2.0, 7.6], drink: [0.6, 7.8] } },
+      laugh:   { sit: 'sitLaugh', stand: 'laugh', cut: 5.5 },
+      stretch: { stand: 'stretch', cut: 7.5, needStand: true },
+      phone:   { stand: 'phone', cut: 9, from: { phone: 1.5 } },
+    };
+
     /* props on the right hand (hanging-arm axes: x out, y up the arm, z forward) */
     const propMat = (c, e = 0.25) => new T.MeshStandardMaterial({ color: c, roughness: 0.6, emissive: c, emissiveIntensity: e });
     bones.RightHand.updateWorldMatrix(true, false);
@@ -141,10 +150,20 @@ export function createAvatar({ T, stage, seat }) {
       const M = new T.Matrix4().compose(pos, DOWNi.R.clone().multiply(rot || new T.Quaternion()), new T.Vector3(1, 1, 1));
       obj.matrix.copy(handW).invert().multiply(M); obj.matrix.decompose(obj.position, obj.quaternion, obj.scale); bones.RightHand.add(obj); obj.visible = false; return obj;
     }
-    const mug = new T.Group(); mug.name = 'avatar_mug';
-    mug.add(new T.Mesh(new T.CylinderGeometry(0.038, 0.034, 0.09, 20), propMat(0xf0ede6)));
-    const mh = new T.Mesh(new T.TorusGeometry(0.025, 0.007, 8, 16), propMat(0xf0ede6)); mh.position.x = -0.042; mug.add(mh);
-    attach(mug, [0, -0.09, 0.04]);
+    const bottleMat = new T.MeshStandardMaterial({ color: 0x8fd0ff, roughness: 0.15, transparent: true, opacity: 0.78, emissive: 0x2a6fa8, emissiveIntensity: 0.35 });
+    function makeBottle(name) {
+      const g = new T.Group(); g.name = name;
+      const body = new T.Mesh(new T.CylinderGeometry(0.031, 0.031, 0.15, 20), bottleMat); body.position.y = 0.075; g.add(body);
+      const neck = new T.Mesh(new T.CylinderGeometry(0.014, 0.029, 0.035, 20), bottleMat); neck.position.y = 0.167; g.add(neck);
+      const cap = new T.Mesh(new T.CylinderGeometry(0.016, 0.016, 0.022, 16), propMat(0xf2f4f8, 0.3)); cap.position.y = 0.195; g.add(cap);
+      g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      return g;
+    }
+    /* gripped in the fist: the bottle's axis runs along the thumb direction (hanging-arm +z), hand around its middle */
+    const mug = new T.Group(); mug.name = 'avatar_bottle_hand';
+    const inHand = makeBottle('avatar_bottle_mesh'); inHand.rotation.x = Math.PI / 2; inHand.position.set(0, 0, -0.09); mug.add(inHand);
+    attach(mug, [0.03, -0.085, 0.0]);
+    const deskBottle = makeBottle('desk_water_bottle'); deskBottle.position.set(0.93, 0.7775, -1.0); root.add(deskBottle);
     const phone = new T.Group(); phone.name = 'avatar_phone';
     phone.add(new T.Mesh(new T.BoxGeometry(0.074, 0.15, 0.01), propMat(0x0e0f12, 0.05)));
     const ps = new T.Mesh(new T.PlaneGeometry(0.066, 0.14), new T.MeshBasicMaterial({ color: 0x9fd0ff, toneMapped: false })); ps.position.z = 0.0056; phone.add(ps);
@@ -154,6 +173,7 @@ export function createAvatar({ T, stage, seat }) {
     /* states: type | sit | walk | stand | standing_up | sitting_down | swivel | climb_in | climb | climb_down | climb_end | to_bed | inbed | from_bed */
     let state = 'type', transT = 0, path = [], faceAfter = 0, onArrive = null, where = 'seat';
     let gesture = null, gStart = 0, gW = 0, last = nowS(), nextBlink = 2, nextAuto = nowS() + 20;
+    let conversing = false, nextHuman = 0, standUntil = 0;
     let chairYaw = YAW_DESK, chairYawTarget = YAW_DESK, chairSlide = DESK_SLIDE, chairSlideTarget = DESK_SLIDE, swivelThen = null;
     const SPEED = 0.85, TRANS = 1.15;
     const v2 = (a) => new T.Vector3(a[0], 0, a[1]);
@@ -228,10 +248,24 @@ export function createAvatar({ T, stage, seat }) {
       walkTo(k, () => { setTimeout(() => { if (state === 'stand' && where === k) goType(); }, 9000 + Math.random() * 6000); });
     }
 
+    let fullClip = null, fullAfter = null;
+    function playFull(name, clip, after) {
+      const f = FULL[name], g = GESTURES[name] || {}, from = (f.from && f.from[clip]) || 0;
+      gesture = { name, full: true, clip, from, dur: Math.min(f.cut || 1e9, clips[clip].duration - from - 0.05), face: g.face, prop: g.prop, win: f.win && f.win[clip], ret: state === 'type' ? 'typing' : state === 'sit' ? 'sitIdle' : 'idle' };
+      gStart = nowS(); fullClip = clip; fullAfter = after || null;
+      setBase(clip, { once: true, fade: 0.45, from });
+    }
     function play(name, dur) {
       const g = GESTURES[name]; if (!g) return false;
+      const f = FULL[name];
+      if (f && actions[f.sit || f.stand]) {
+        const sitting = state === 'sit' || state === 'type';
+        if (f.needStand && sitting) { const back = state; standUp(() => playFull(name, f.stand, () => (back === 'type' && !conversing ? goType() : goSit()))); return true; }
+        const clip = sitting ? f.sit : state === 'stand' ? f.stand : null;
+        if (clip && actions[clip]) { playFull(name, clip); return true; }
+      }
       gesture = { ...g, name, dur: dur || g.dur || (g.clip ? clips[g.clip].duration * (g.loops || 1) : 3), s: g.clip ? sampler(g.clip) : null }; gStart = nowS();
-      mug.visible = g.prop === 'mug'; phone.visible = g.prop === 'phone';
+      mug.visible = g.prop === 'bottle'; deskBottle.visible = !mug.visible; phone.visible = g.prop === 'phone';
       if (state === 'type') faceRoom();          // look at the visitor for gestures
       return true;
     }
@@ -294,7 +328,18 @@ export function createAvatar({ T, stage, seat }) {
       let faceMode = state === 'inbed' || state === 'to_bed' ? 'closed' : 'neutral', look = 0;
       if (gesture) {
         const t = now - gStart;
-        if (t > gesture.dur) gesture = null;
+        if (gesture.full) {
+          const ct = gesture.from + t, w = gesture.win;
+          if (gesture.prop === 'bottle') { mug.visible = !w || (ct >= w[0] && ct <= w[1]); deskBottle.visible = !mug.visible; }
+          if (gesture.prop === 'phone') phone.visible = true;
+          faceMode = gesture.face || 'neutral';
+          if (t > gesture.dur) {
+            const g0 = gesture; gesture = null; mug.visible = phone.visible = false; deskBottle.visible = true;
+            if (base === actions[g0.clip]) setBase(g0.ret, { fade: 0.5 });
+            const f = fullAfter; fullAfter = null; if (f) f();
+          }
+        }
+        else if (t > gesture.dur) gesture = null;
         else {
           const k = clamp(Math.min(t / 0.4, (gesture.dur - t) / 0.4), 0, 1); gW += (k - gW) * (1 - Math.exp(-dt * 10));
           faceMode = gesture.face || 'neutral'; look = gesture.look ? k : 0;
@@ -302,9 +347,9 @@ export function createAvatar({ T, stage, seat }) {
           if (gesture.s) gesture.s.apply(((gesture.from || 0) + t) % gesture.s.duration, w);
           else if (gesture.pose) { const p = gesture.pose(t); for (const j in p) { const n = JOINT[j]; if (bones[n]) bones[n].quaternion.slerp(targetLocal(n, p[j], tq), w); } }
         }
-      } else { gW += (0 - gW) * (1 - Math.exp(-dt * 8)); if (gW < 0.01) mug.visible = phone.visible = false; }
+      } else { gW += (0 - gW) * (1 - Math.exp(-dt * 8)); if (gW < 0.01 && !gesture) { mug.visible = phone.visible = false; deskBottle.visible = true; } }
       /* head turns toward whoever is watching during social gestures / while sitting facing the room */
-      const wantLook = look || (state === 'sit' ? 0.6 : 0);
+      const wantLook = (gesture && gesture.full) ? 0 : (look || (state === 'sit' || (conversing && state === 'stand') ? 0.6 : 0));
       if (wantLook > 0.01) {
         camLocal.copy(stage._camera.position); rig.worldToLocal(camLocal);
         const ang = clamp(Math.atan2(camLocal.x, camLocal.z), -1.3, 1.3), pitch = clamp(-Math.atan2(camLocal.y - 1.5, Math.hypot(camLocal.x, camLocal.z)), -0.4, 0.3);
@@ -329,9 +374,20 @@ export function createAvatar({ T, stage, seat }) {
         bubble.style.left = (r.left + (headPos.x + 1) / 2 * r.width) + 'px'; bubble.style.top = (r.top + (1 - headPos.y) / 2 * r.height) + 'px';
         bubble.style.opacity = headPos.z < 1 ? '1' : '0';
       } else bubble.style.opacity = '0';
-      if (now > nextAuto && !gesture && (state === 'sit' || state === 'type' || state === 'stand' || state === 'inbed')) {
+      if (conversing) {
+        if (now > nextHuman && !gesture && (state === 'sit' || state === 'stand')) {
+          nextHuman = now + 16 + Math.random() * 18;
+          const r = Math.random();
+          if (state === 'stand') { if (now > standUntil) goSit(); else play(pickOne(['drink', 'neck', 'phone', 'think'])); }
+          else if (r < 0.34) play('drink');
+          else if (r < 0.48) play('neck');
+          else if (r < 0.68) standUp(() => { standUntil = nowS() + 22 + Math.random() * 20; });   // stretch the legs, keep talking
+          else if (r < 0.84) play('stretch');
+          else play('think');
+        }
+      } else if (now > nextAuto && !gesture && (state === 'sit' || state === 'type' || state === 'stand' || state === 'inbed')) {
         nextAuto = now + 25 + Math.random() * 20;
-        if (state === 'inbed') { say('Chalo, kaam pe wapas', 3); goType(); }
+        if (state === 'inbed') { say('Alright, back to work', 3); goType(); }
         else if (state === 'sit') goType();
         else if (state === 'stand') goType();
         else { const r = Math.random(); if (r < 0.3) wander(); else if (r < 0.4) goBed(); else if (r < 0.7) play(pickOne(['stretch', 'neck', 'drink', 'phone'])); }
@@ -340,42 +396,43 @@ export function createAvatar({ T, stage, seat }) {
 
     /* ---------- text commands ---------- */
     const GO = [
-      [/\b(window|khidki|bahar|outside|view)\b/, 'window', ['Bahar ka view dekhta hoon', 'Nice view from here 🌆']],
-      [/\b(desk|monitor|setup)\b/, 'desk', ['Yeh raha mera setup 🖥️']],
-      [/\b(door|darwaza|gate)\b/, 'door', ['Koi aaya kya? 🚪']],
-      [/\b(come here|idhar aa|aaja|aa ja|center|front|samne|saamne|closer|paas)\b/, 'center', ['Haan bol 👀', 'Aa gaya']],
+      [/\b(window|khidki|bahar|outside|view)\b/, 'window', ['Let me check the view', 'Nice view from here 🌆']],
+      [/\b(desk|monitor|setup)\b/, 'desk', ['This is my setup 🖥️']],
+      [/\b(door|darwaza|gate)\b/, 'door', ['Someone at the door? 🚪']],
+      [/\b(come here|idhar aa|aaja|aa ja|center|front|samne|saamne|closer|paas)\b/, 'center', ['Yes? 👀', 'Here I am']],
     ];
     const RULES = [
-      [/\b(dance|party|naach|nach|vibe|music|gaana)\b/, 'dance', ['Dance mode 🕺', 'DJ, volume badha!']],
-      [/\b(stretch|tired|thak|thaka|break|angdai)\b/, 'stretch', ['Aaah… needed that', 'Long day bro']],
-      [/\b(neck|gardan)\b/, 'neck', ['Gardan akad gayi thi']],
-      [/\b(drink|coffee|chai|tea|water|paani|pani|sip)\b/, 'drink', ['Chai break ☕', 'Hydration first']],
-      [/\b(phone|scroll|insta|instagram|text|call|reel|reels)\b/, 'phone', ['Ek min, reply kar raha hoon…', 'Just one reel 📱']],
-      [/\b(lol|lmao|haha+|funny|joke|laugh|hasa)\b/, 'laugh', ['Hahaha 😂', 'Sahi tha yeh']],
-      [/\b(think|idea|soch|socho|hmm+|why|how|kyu|kyun|kaise)\b/, 'think', ['Hmm, let me think…', 'Sochne de 🤔']],
-      [/\b(nice|cool|great|awesome|good|thumbs|like|love|badhiya|mast|sahi)\b/, 'thumbs', ['👍 Badhiya!', 'Appreciate it!']],
-      [/\b(shrug|idk|dunno|pata nahi|whatever|kya pata)\b/, 'shrug', ['Pata nahi yaar 🤷', 'No idea honestly']],
-      [/\b(yes|yeah|yep|haan|han|ok|okay|nod|agree|right|theek)\b/, 'nod', ['Haan haan', 'Yep 👍']],
-      [/\b(no|nah|nahi|nope|never|mat)\b/, 'no', ['Nahi bhai', 'Nope']],
-      [/\b(hi+|hello|hey+|namaste|yo|sup|wave|bye|hola|salaam|kaise ho|welcome)\b/, 'wave', ['Hey! 👋 Welcome to my room', 'Namaste 🙏', 'Yo! Look around, click stuff']],
+      [/\b(dance|party|naach|nach|vibe|music|gaana)\b/, 'dance', ['Dance mode 🕺', 'Turn it up!']],
+      [/\b(stretch|tired|thak|thaka|break|angdai)\b/, 'stretch', ['Aaah… needed that', 'Long day']],
+      [/\b(neck|gardan)\b/, 'neck', ['Stiff neck…']],
+      [/\b(drink|coffee|chai|tea|water|paani|pani|sip)\b/, 'drink', ['Water break 💧', 'Hydration first']],
+      [/\b(phone|scroll|insta|instagram|text|call|reel|reels)\b/, 'phone', ['One sec, replying…', 'Just one message 📱']],
+      [/\b(lol|lmao|haha+|funny|joke|laugh|hasa)\b/, 'laugh', ['Hahaha 😂', 'Good one']],
+      [/\b(think|idea|soch|socho|hmm+|why|how|kyu|kyun|kaise)\b/, 'think', ['Hmm, let me think…', 'Give me a second 🤔']],
+      [/\b(nice|cool|great|awesome|good|thumbs|like|love|badhiya|mast|sahi)\b/, 'thumbs', ['👍 Nice!', 'Appreciate it!']],
+      [/\b(shrug|idk|dunno|pata nahi|whatever|kya pata)\b/, 'shrug', ['Not sure 🤷', 'No idea, honestly']],
+      [/\b(yes|yeah|yep|haan|han|ok|okay|nod|agree|right|theek)\b/, 'nod', ['Yes', 'Yep 👍']],
+      [/\b(no|nah|nahi|nope|never|mat)\b/, 'no', ['No', 'Nope']],
+      [/\b(hi+|hello|hey+|namaste|yo|sup|wave|bye|hola|salaam|kaise ho|welcome)\b/, 'wave', ['Hey! 👋 Welcome to my room', 'Hi there 👋', 'Hey! Look around, click stuff']],
     ];
     api.command = function command(text) {
       const raw = String(text || '').trim(); if (!raw) return; nextAuto = nowS() + 35;
       const m = raw.match(/^(say|bol|bolo)\s+(.+)/i);
       if (m) { play('talk', Math.min(7, 2 + m[2].length * 0.06)); say(m[2]); return; }
       const low = raw.toLowerCase();
-      if (/\b(bed|bistar|palang|sleep|nap|so ja|soja|sleepy|night|zzz|sone)\b/.test(low)) { say(state === 'inbed' ? 'So raha hoon yaar 😴' : pickOne(['Thak gaya, sone jaa raha hoon 😴', 'Good night 🌙', 'Bed time 🛏️'])); goBed(); return; }
-      if (/\b(wake|jaag|jag|utho|uth ja|get up)\b/.test(low)) { say('Uth gaya uth gaya 😩'); ensureStanding(); return; }
-      if (/\b(type|typing|work|kaam|code|computer|laptop|pc|back to work)\b/.test(low)) { say(pickOne(['Back to work 💻', 'Kaam pe lagta hoon', 'Deadline hai bhai'])); goType(); return; }
-      if (/\b(sit|baith|beth|wapas|chair|kursi|turn|mudh|ghoom ke dekh)\b/.test(low)) { say(state === 'sit' ? 'Baitha toh hoon 😄' : 'Haan, bol'); goSit(); return; }
-      if (/\b(stand|uth|khada)\b/.test(low)) { say('Uth gaya 💪'); ensureStanding(); return; }
-      if (/\b(walk|ghoom|ghum|tehel|roam|wander|chal|move)\b/.test(low)) { say('Thoda ghoom ke aata hoon 🚶'); wander(); return; }
+      if (/\b(bed|bistar|palang|sleep|nap|so ja|soja|sleepy|night|zzz|sone)\b/.test(low)) { say(state === 'inbed' ? 'Already sleeping 😴' : pickOne(['Tired — going to bed 😴', 'Good night 🌙', 'Bed time 🛏️'])); goBed(); return; }
+      if (/\b(wake|jaag|jag|utho|uth ja|get up)\b/.test(low)) { say("I'm up, I'm up 😩"); ensureStanding(); return; }
+      if (/\b(type|typing|work|kaam|code|computer|laptop|pc|back to work)\b/.test(low)) { say(pickOne(['Back to work 💻', 'On it', 'Deadline day'])); goType(); return; }
+      if (/\b(sit|baith|beth|wapas|chair|kursi|turn|mudh|ghoom ke dekh)\b/.test(low)) { say(state === 'sit' ? 'Already sitting 😄' : 'Yes, tell me'); goSit(); return; }
+      if (/\b(stand|uth|khada)\b/.test(low)) { say('Standing up 💪'); ensureStanding(); return; }
+      if (/\b(walk|ghoom|ghum|tehel|roam|wander|chal|move)\b/.test(low)) { say('Going for a little walk 🚶'); wander(); return; }
       for (const [re, key, lines] of GO) if (re.test(low)) { say(pickOne(lines)); walkTo(key); return; }
-      if (/\b(dance|party|naach|nach|vibe|music|gaana)\b/.test(low)) { say(pickOne(['Dance mode 🕺', 'DJ, volume badha!'])); ensureStanding(() => { state = 'stand'; setBase('dance', { fade: 0.4 }); setTimeout(() => { if (base === actions.dance) { setBase('idle', { fade: 0.5 }); } }, 9000); }); return; }
+      if (/\b(dance|party|naach|nach|vibe|music|gaana)\b/.test(low)) { say(pickOne(['Dance mode 🕺', 'Turn it up!'])); ensureStanding(() => { state = 'stand'; setBase('dance', { fade: 0.4 }); setTimeout(() => { if (base === actions.dance) { setBase('idle', { fade: 0.5 }); } }, 9000); }); return; }
       if (GESTURES[low]) { const r = RULES.find(x => x[1] === low); play(low); if (r) say(pickOne(r[2])); return; }
       for (const [re, act, lines] of RULES) if (re.test(low)) { play(act); say(pickOne(lines)); return; }
-      play('shrug'); say('Try: walk, window, desk, bed, sit, work, wave, dance, chai… or "say <anything>"', 5.5);
+      play('shrug'); say('Try: walk, window, desk, bed, sit, work, wave, dance, water… or "say <anything>"', 5.5);
     };
+    api.converse = (on) => { conversing = !!on; nextHuman = nowS() + 10 + Math.random() * 10; if (!on) nextAuto = nowS() + 6; };
     api.hold = (secs) => { nextAuto = nowS() + secs; };   // keep the idle behaviour away while someone is talking to him
     api.play = play; api.say = say; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.type = goType; api.bed = goBed; api.up = ensureStanding;
     api.state = () => ({ state, where, base: base && base.getClip().name, chairYaw: +chairYaw.toFixed(2) });
@@ -389,12 +446,12 @@ export function createAvatar({ T, stage, seat }) {
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;left:16px;bottom:52px;z-index:45;display:flex;flex-wrap:wrap;gap:6px;align-items:center;max-width:min(640px,calc(100vw - 32px));font:500 12px/1 system-ui,sans-serif';
   const chipCss = 'cursor:pointer;border:1px solid rgba(255,255,255,.14);background:rgba(12,14,20,.78);color:#e9ecf3;padding:7px 10px;border-radius:999px;font:inherit;backdrop-filter:blur(6px)';
-  [['💻', 'work'], ['🚶', 'walk'], ['🪑', 'sit'], ['👋', 'wave'], ['🕺', 'dance'], ['☕', 'drink'], ['🙆', 'stretch'], ['📱', 'phone'], ['😂', 'laugh'], ['😴', 'sleep']].forEach(([icon, act]) => {
+  [['💻', 'work'], ['🚶', 'walk'], ['🪑', 'sit'], ['👋', 'wave'], ['🕺', 'dance'], ['💧', 'drink'], ['🙆', 'stretch'], ['📱', 'phone'], ['😂', 'laugh'], ['😴', 'sleep']].forEach(([icon, act]) => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = icon; b.title = act; b.setAttribute('aria-label', act); b.style.cssText = chipCss;
     b.addEventListener('click', () => api.command(act)); bar.appendChild(b);
   });
   const input = document.createElement('input');
-  input.type = 'text'; input.placeholder = 'Tell me what to do…  ("go to window", "chai", "say hi")'; input.maxLength = 120; input.setAttribute('aria-label', 'Tell the avatar what to do');
+  input.type = 'text'; input.placeholder = 'Tell me what to do…  ("go to window", "drink water", "say hi")'; input.maxLength = 120; input.setAttribute('aria-label', 'Tell the avatar what to do');
   input.style.cssText = chipCss + ';cursor:text;flex:1 1 220px;min-width:0;outline:none;border-radius:12px;padding:9px 12px;font-size:13px';
   ['keydown', 'keyup', 'keypress'].forEach(ev => input.addEventListener(ev, e => e.stopPropagation()));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { api.command(input.value); input.value = ''; } });

@@ -61,7 +61,7 @@ const SOURCES = [
   { file: 'mixamo.glb', clips: {
     'Arm Stretching': 'stretch', 'Neck Stretching': 'neckStretch', 'Drinking': 'drink', 'Waving': 'wave', 'Texting While Standing': 'phone',
     'Wave Hip Hop Dance': 'dance', 'Sitting Idle': 'sitIdle', 'Sitting Laughing': 'sitLaugh', 'Sit To Type': 'sitToType', 'Type To Sit': 'typeToSit',
-    'Typing': 'typing', 'Start Climbing Ladder': 'climbStart', 'Climbing Ladder': 'climb', 'Lying Down': 'lieDown' } },
+    'Typing': 'typing', 'Sitting Drinking': 'sitDrink', 'Laughing': 'laugh', 'Start Climbing Ladder': 'climbStart', 'Climbing Ladder': 'climb', 'Lying Down': 'lieDown' } },
 ];
 const IN_PLACE_XZ = new Set(['walk', 'climbStart', 'climb', 'dance', 'idle']);
 const IN_PLACE_Y = new Set(['climb']);
@@ -116,6 +116,37 @@ for (const src of SOURCES) {
     console.log(outName.padEnd(12), 'dur', dur.toFixed(2), 'hips', hipsStart, '->', hipsEnd, 'drift', drift);
   }
 }
+/* ---- sub-clips: cut a window out of a longer take and seat it on the reference clip (same hips spot, height, facing) ---- */
+const SUBCLIPS = [{ name: 'sitDrink', from: 5.0, to: 15.2, ref: 'sitIdle' }];
+const yawOf = (q) => { const f = new Vector3(0, 0, 1).applyQuaternion(q); return Math.atan2(f.x, f.z); };
+for (const sc of SUBCLIPS) {
+  const anim = outDoc.getRoot().listAnimations().find(a => a.getName() === sc.name), ref = outDoc.getRoot().listAnimations().find(a => a.getName() === sc.ref);
+  const chan = (a, path) => a.listChannels().find(c => c.getTargetNode().getName() === 'Hips' && c.getTargetPath() === path);
+  const refPos = chan(ref, 'translation').getSampler().getOutput().getArray(), refRot = chan(ref, 'rotation').getSampler().getOutput().getArray();
+  const refYaw = yawOf(new Quaternion(refRot[0], refRot[1], refRot[2], refRot[3]));
+  const times = anim.listSamplers()[0].getInput().getArray();
+  let i0 = 0, i1 = times.length - 1; while (times[i0] < sc.from) i0++; while (times[i1] > sc.to) i1--;
+  const n = i1 - i0 + 1, newTimes = new Float32Array(n); for (let i = 0; i < n; i++) newTimes[i] = times[i0 + i] - times[i0];
+  const tAcc = outDoc.createAccessor().setType(Accessor.Type.SCALAR).setArray(newTimes).setBuffer(buffer);
+  let fix = null, base = null;
+  for (const c of anim.listChannels()) {
+    const smp = c.getSampler(), size = c.getTargetPath() === 'rotation' ? 4 : 3, src = smp.getOutput().getArray(), out = new Float32Array(n * size);
+    out.set(src.subarray(i0 * size, (i1 + 1) * size));
+    if (c.getTargetNode().getName() === 'Hips' && size === 4) {
+      fix = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), refYaw - yawOf(new Quaternion(out[0], out[1], out[2], out[3])));
+      for (let i = 0; i < n; i++) { const q = fix.clone().multiply(new Quaternion(out[i * 4], out[i * 4 + 1], out[i * 4 + 2], out[i * 4 + 3])); out.set(q.toArray(), i * 4); }
+      console.log(sc.name, 'yaw fix', (refYaw - yawOf(new Quaternion(src[i0 * 4], src[i0 * 4 + 1], src[i0 * 4 + 2], src[i0 * 4 + 3]))).toFixed(2));
+    }
+    if (c.getTargetNode().getName() === 'Hips' && size === 3) {
+      base = [out[0], out[1], out[2]];
+      for (let i = 0; i < n; i++) { const d = new Vector3(out[i * 3] - base[0], 0, out[i * 3 + 2] - base[2]); if (fix) d.applyQuaternion(fix); out[i * 3] = refPos[0] + d.x; out[i * 3 + 1] = out[i * 3 + 1] - base[1] + refPos[1]; out[i * 3 + 2] = refPos[2] + d.z; }
+    }
+    smp.setInput(tAcc).setOutput(outDoc.createAccessor().setType(size === 4 ? Accessor.Type.VEC4 : Accessor.Type.VEC3).setArray(out).setBuffer(buffer));
+  }
+  meta[sc.name] = { ...meta[sc.name], duration: +newTimes[n - 1].toFixed(3), frames: n, subclip: [sc.from, sc.to] };
+  console.log(sc.name, 'subclip', sc.from, '→', sc.to, 'dur', newTimes[n - 1].toFixed(2));
+}
+const { prune } = await import('@gltf-transform/functions'); await outDoc.transform(prune());
 await io.write('../site/me-anims.glb', outDoc);
 fs.writeFileSync('../site/me-anims.json', JSON.stringify(meta, null, 1));
 console.log('wrote ../site/me-anims.glb', fs.statSync('../site/me-anims.glb').size, 'bytes');

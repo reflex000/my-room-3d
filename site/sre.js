@@ -63,7 +63,7 @@ export function initSRE({ T, stage, avatar, screens }) {
       b.onclick = go; i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
       foot.append(i, b); return;
     }
-    const t = el('textarea'); t.rows = 2; t.placeholder = 'e.g. "mujhe Azure mein ek VM chahiye"'; t.maxLength = 1500; t.setAttribute('aria-label', 'Message');
+    const t = el('textarea'); t.rows = 2; t.placeholder = 'e.g. "I need a server to try out my app"'; t.maxLength = 1500; t.setAttribute('aria-label', 'Message');
     const b = el('button', null, 'Send'); b.type = 'button'; b.disabled = busy;
     const go = () => { const v = t.value.trim(); if (!v || busy) return; t.value = ''; send(v); };
     b.onclick = go; t.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
@@ -77,7 +77,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   async function send(text) {
     messages.push({ role: 'user', content: text }); addMsg('user', text);
     busy = true; renderFoot(); const dots = addMsg('system', 'Sid is thinking…');
-    av('hold', 180); av('play', 'think', 6);
+    av('converse', true); av('play', 'think', 6);
     try {
       const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token) }) });
       const data = await r.json().catch(() => ({}));
@@ -89,6 +89,7 @@ export function initSRE({ T, stage, avatar, screens }) {
         messages.push({ role: 'assistant', content: data.reply }); addMsg('assistant', data.reply);
         av('say', short(data.reply)); av('play', (data.actions && data.actions[0]) || 'talk', data.actions && data.actions[0] ? undefined : Math.min(6, 2 + data.reply.length * 0.04));
         if (data.job) startJob(data.job);
+        else if (jobs.some(j => status[j.id] && !status[j.id].done)) setTimeout(() => av('type'), 7000);   // he answers, then goes back to the job
       }
     } catch (e) { dots.remove(); messages.pop(); addMsg('system', 'Network error. Try again.'); }
     busy = false; renderFoot();
@@ -99,7 +100,7 @@ export function initSRE({ T, stage, avatar, screens }) {
     jobs.unshift({ token: job.token, id: job.status.id }); jobs = jobs.slice(0, 8); LS.set('sre.jobs', jobs); status[job.status.id] = job.status;
     if ('Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch (e) {} }
     renderTickets(); poll();
-    setTimeout(() => { av('hold', 120); av('type'); }, 2600);
+    setTimeout(() => { av('converse', false); av('hold', 120); av('type'); }, 2600);
   }
   const statusLink = (j) => location.origin + location.pathname + '?job=' + encodeURIComponent(j.token);
   function renderTickets() {
@@ -128,9 +129,9 @@ export function initSRE({ T, stage, avatar, screens }) {
   }
   function onDone(j, s) {
     if (announced.has(s.id)) return; announced.add(s.id); LS.set('sre.announced', [...announced]);
-    const o = s.outputs || {}, line = `Ho gaya ✅ ${s.id}: ${o.vm_name} (${o.region}), private IP ${o.private_ip}, ${o.expires_in_days} din mein auto-delete.${o.note ? ' ' + o.note : ''}`;
+    const o = s.outputs || {}, line = `Done ✅ ${s.id}: ${o.vm_name} is ready in ${o.region}. It will be removed automatically in ${o.expires_in_days} day(s).${o.note ? ' ' + o.note : ''}`;
     messages.push({ role: 'assistant', content: line }); addMsg('assistant', line);
-    av('hold', 60); av('sit', () => { av('play', 'thumbs'); av('say', `Ho gaya! ${s.id} ready hai ✅`, 6); });
+    av('hold', 60); av('sit', () => { av('play', 'thumbs'); av('say', `All done — ${s.id} is ready ✅`, 6); });
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') { try { new Notification('Sid · SRE desk', { body: `${s.id} is done — ${o.vm_name}` }); } catch (e) {} }
     setTimeout(() => { if (monitor && !jobs.some(k => status[k.id] && !status[k.id].done)) { monitor.draw = monitorOrig; } }, 25000);
   }
@@ -180,7 +181,8 @@ export function initSRE({ T, stage, avatar, screens }) {
   /* ---------- open / close ---------- */
   function setOpen(v) {
     open = v; panel.classList.toggle('open', v); launch.style.display = v ? 'none' : '';
-    if (v) { if (!messages.length && invite) greet(); av('hold', 180); av('sit', () => av('play', 'wave')); renderFoot(); }
+    if (v) { if (!messages.length && invite) greet(); av('converse', true); av('sit', () => av('play', 'wave')); renderFoot(); }
+    else av('converse', false);
   }
   launch.onclick = () => setOpen(true); x.onclick = () => setOpen(false);
 

@@ -1,32 +1,41 @@
-# Skill: azure-vm — create a virtual machine in the sandbox subscription
+# Skill: azure-vm — a virtual machine in the sandbox subscription
 
-Use when the visitor wants a VM / server / box / "machine" in Azure.
+Use when the visitor needs "a server / machine / box / VM / somewhere to run X".
 
-## Intake — what a normal SRE asks (collect all before summarising)
-1. **Purpose** — what is it for? (test app, build agent, demo, learning…). One line is enough.
-2. **Environment** — dev, test or demo. **Production is not allowed here** (this is a sandbox): refuse kindly and suggest the proper prod path with a change request.
-3. **Size** — ask about workload (CPU/RAM needs, how many users) and recommend the smallest that fits. Allowed: `Standard_B1s` (1 vCPU/1 GB), `Standard_B1ms` (1/2), `Standard_B2s` (2/4), `Standard_B2ms` (2/8). Anything bigger: not available in the sandbox.
-4. **OS** — `ubuntu-24.04` (default), `ubuntu-22.04`, or `windows-2022`.
-5. **Region** — default `canadacentral`. Allowed: `canadacentral`, `canadaeast`, `westus2`, `eastus`.
-6. **Lifetime (TTL)** — how many days do they need it? 1–14 days. Everything is auto-deleted at expiry; say this clearly.
-7. **Access** — `private` (no public IP, reachable only inside the VNet — default) or `public_ssh` (public IP, SSH/RDP allowed **only from their IP**). For `public_ssh` you need their public IPv4 (`source_ip`). Never open to 0.0.0.0/0.
-8. **SSH public key** — required for Linux (`ssh-ed25519 …` or `ssh-rsa …`). Public key only. For Windows, credentials go to Key Vault; never to chat.
-9. **Observability** — `none`, `basic` (Azure Monitor agent + CPU/disk/heartbeat alerts) or `full` (basic + log collection + dashboard). Recommend `basic` unless it is a throwaway box.
-10. **Backup** — needed? (usually no for ≤14-day sandbox boxes; ask only if the purpose suggests data matters).
-11. **Owner + cost tag** — their name, and which team/project pays (`cost_tag`). Optional: contact email for the done-notification.
+## Intake — plain-English questions only (one at a time, skip what you already know)
+1. **What is it for?** What will run on it (a small web app, a script, a demo, a build job…)?
+2. **Who uses it and how heavy is it?** Just them, a few teammates, a demo audience? Anything CPU- or memory-hungry?
+3. **Does anyone need to open it from the internet**, or is it enough that they (or their team) can log into it?
+4. **How long do they need it?** Days, not months — this is a sandbox (max 14 days, auto-deleted at the end; say this clearly).
+5. **Does it hold anything they cannot afford to lose?** (decides backup)
+6. **Is this real production or customer-facing?** If yes: this desk cannot do it — explain kindly that production goes through the change process, and offer a sandbox copy to try things first.
+7. **Name and which team/project should be billed**, and optionally an email for the "it's ready" message.
 
-## Rough cost (pay-as-you-go, Linux, per month, approximate — say "roughly")
-B1s ≈ $10 · B1ms ≈ $20 · B2s ≈ $40 · B2ms ≈ $80. Windows ≈ +40%. Public IP ≈ +$4. `full` observability ≈ +$5–15 depending on logs. Pro-rate by TTL days when you quote.
+Never ask for: VM size, OS version, region, IP addresses, network design, SSH keys, monitoring level. You decide those.
+
+## Your decisions (map the answers to parameters yourself)
+- `environment`: `demo` if it is shown to others, `test` if it validates something, else `dev`.
+- `vm_size`: light script / tiny app / one user → `Standard_B1s`; small web app or a few users → `Standard_B1ms`; builds, several users, anything "a bit heavy" → `Standard_B2s`; memory-hungry → `Standard_B2ms`. Nothing bigger exists here.
+- `os`: `ubuntu-24.04` unless they clearly need Windows (`windows-2022`).
+- `region`: `canadacentral` unless they mention being in the US (`westus2` / `eastus`).
+- `network`: `private` by default. `public_ssh` only if people must reach it from the internet; the server locks access to the visitor's current IP automatically — do not ask for it.
+- `access`: `managed` (you send them login instructions via their company sign-in when it is ready). Use `ssh_key` only if they spontaneously give you an SSH **public** key.
+- `observability`: `basic` by default; `none` for a 1–2 day throwaway; `full` if others depend on it or it is a demo that must not die.
+- `backup`: true only if they said the data matters.
+- `ttl_days`: what they asked for, 1–14.
+
+## Rough cost (pay-as-you-go, per month, approximate — always say "roughly")
+B1s ≈ $10 · B1ms ≈ $20 · B2s ≈ $40 · B2ms ≈ $80. Windows ≈ +40%. Internet-reachable ≈ +$4. `full` monitoring ≈ +$5–15. Pro-rate by the number of days.
 
 ## Output — call `submit_request` with
 ```json
 { "skill": "azure-vm",
   "params": { "purpose": "...", "environment": "dev|test|demo", "vm_size": "Standard_B1s|Standard_B1ms|Standard_B2s|Standard_B2ms",
-    "os": "ubuntu-24.04|ubuntu-22.04|windows-2022", "region": "canadacentral|canadaeast|westus2|eastus", "ttl_days": 1,
-    "network": "private|public_ssh", "source_ip": "x.x.x.x (only if public_ssh)", "ssh_public_key": "ssh-… (linux only)",
+    "os": "ubuntu-24.04|ubuntu-22.04|windows-2022", "region": "canadacentral|canadaeast|westus2|eastus", "ttl_days": 3,
+    "network": "private|public_ssh", "access": "managed|ssh_key", "ssh_public_key": "only when access is ssh_key",
     "observability": "none|basic|full", "backup": false, "requester_name": "...", "cost_tag": "...", "requester_contact": "optional email" } }
 ```
-The server validates this again; if it returns errors, fix them with the visitor and resubmit.
+The server validates again and fills in the visitor's IP when needed. If it returns errors, fix them yourself where you can; only go back to the visitor for something only they know.
 
 ## After submit
-Tell them the ticket id, that the pipeline is: what-if → Sid's approval → deploy → monitoring, that they can leave and come back with the status link, and that you will ping them when it is done. Then get to work.
+Ticket id, one sentence on what happens next (plan check → Sid's approval → build → monitoring), they can leave and come back with the status link, you will tell them when it is ready. Then get to work.
