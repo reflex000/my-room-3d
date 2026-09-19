@@ -28,6 +28,9 @@ export function createAvatar({ T, stage, seat }) {
   const bubble = document.createElement('div');
   bubble.style.cssText = 'position:fixed;z-index:40;pointer-events:none;transform:translate(-50%,-100%);max-width:240px;padding:8px 12px;border-radius:14px;background:#f4f5f8;color:#14161c;font:600 13px/1.3 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.45);opacity:0;transition:opacity .2s;text-align:center';
   document.body.appendChild(bubble);
+  const note = document.createElement('div');
+  note.style.cssText = 'position:fixed;z-index:39;pointer-events:none;transform:translate(-50%,-100%);padding:7px 11px;border-radius:10px;background:rgba(12,14,20,.86);color:#e9ecf3;border:1px solid rgba(255,255,255,.14);font:500 12.5px/1.3 system-ui,sans-serif;opacity:0;transition:opacity .4s;white-space:nowrap';
+  document.body.appendChild(note);
   let bubbleUntil = 0;
   function say(text, secs) { bubble.textContent = text; bubbleUntil = nowS() + (secs || Math.min(7, 2.2 + text.length * 0.06)); }
 
@@ -50,6 +53,8 @@ export function createAvatar({ T, stage, seat }) {
     door:   { p: [-0.05, -0.05], face: Math.PI + 0.35, via: [[0.0, 0.55]] },
   };
 
+  const EXIT = new T.Vector3(0.1, 0, 2.12);                    // he leaves / returns over the open front edge of the room
+  const BASKET = new T.Vector3(2.19, 0.26, -0.06), BASKET_R = 0.118;   // waste basket rim (room coords)
   let chair = null, chairHome = null;   // swivel-chair pivot (room coords), set by room.js
   api.setChair = (pivot) => { chair = pivot; chairHome = pivot.position.clone(); };
 
@@ -129,8 +134,26 @@ export function createAvatar({ T, stage, seat }) {
       nod:     { look: 1, dur: 1.8, face: 'smile', pose: (t) => ({ head: [0.1 + S(t * 9) * 0.18, 0, 0] }) },
       no:      { look: 1, dur: 1.9, pose: (t) => ({ head: [0.03, S(t * 9) * 0.36, 0] }) },
       shrug:   { look: 1, dur: 2.2, face: 'brow', pose: () => ({ shL: [-0.35, 0, 0.5], shR: [-0.35, 0, -0.5], elL: [-1.7, 0, 0.5], elR: [-1.7, 0, -0.5], head: [0, 0, 0.14] }) },
+      toss:    { dur: 2.3, face: 'neutral', pose: (t) => tossPose(t) },
       talk:    { look: 1, dur: 3, face: 'talk', pose: (t) => ({ head: [0.02 + S(t * 5) * 0.03, S(t * 1.7) * 0.06, 0] }) },
     };
+
+    /* paper toss: crumple with both hands, wind up, overhand throw (key poses blended with smoothstep) */
+    const TOSS_KEYS = [
+      { t: 0.0,  shR: [-0.75, 0, 0.45], elR: [-1.5, 0, 0], shL: [-0.75, 0, -0.45, 1], elL: [-1.5, 0, 0, 1], head: [0.28, 0, 0], torso: [0.06, 0, 0] },
+      { t: 0.95, shR: [-0.8, 0, 0.4],   elR: [-1.55, 0, 0], shL: [-0.75, 0, -0.45, 1], elL: [-1.5, 0, 0, 1], head: [0.25, 0, 0], torso: [0.06, 0, 0] },
+      { t: 1.38, shR: [-2.75, 0, -0.12], elR: [-1.95, 0, 0], shL: [-0.3, 0, 0.1, 0.3], elL: [-1.0, 0, 0, 0.3], head: [-0.05, 0, 0], torso: [-0.12, 0.12, 0] },
+      { t: 1.56, shR: [-1.45, 0, 0.05], elR: [-0.25, 0, 0], shL: [-0.2, 0, 0.1, 0], elL: [-1.0, 0, 0, 0], head: [0.0, 0, 0], torso: [0.16, -0.1, 0] },
+      { t: 2.3,  shR: [-0.6, 0, 0.12],  elR: [-0.6, 0, 0],  shL: [-0.2, 0, 0.1, 0], elL: [-1.0, 0, 0, 0], head: [0.0, 0, 0], torso: [0.04, 0, 0] },
+    ];
+    function tossPose(t) {
+      let a = TOSS_KEYS[0], b = TOSS_KEYS[TOSS_KEYS.length - 1];
+      for (let i = 0; i < TOSS_KEYS.length - 1; i++) if (t >= TOSS_KEYS[i].t && t <= TOSS_KEYS[i + 1].t) { a = TOSS_KEYS[i]; b = TOSS_KEYS[i + 1]; break; }
+      const k = smooth(clamp((t - a.t) / Math.max(0.001, b.t - a.t), 0, 1)), out = {};
+      for (const j of ['shR', 'elR', 'shL', 'elL', 'head', 'torso']) { const A = a[j], B = b[j], n = Math.max(A.length, B.length), o = []; for (let i = 0; i < n; i++) { const av = A[i] === undefined ? 1 : A[i], bv = B[i] === undefined ? 1 : B[i]; o.push(av + (bv - av) * k); } out[j] = o; }
+      if (t < 0.95) { const wig = S(t * 22) * 0.06; out.elR[0] += wig; out.elL[0] -= wig; }   // crumpling
+      return out;
+    }
 
     /* full-body takes: a seated and/or standing mocap clip played as a one-shot base, then back to the posture's loop.
        `win` = seconds (clip time) during which the hand prop is out. `needStand`: he gets up for it, like a person would. */
@@ -164,6 +187,9 @@ export function createAvatar({ T, stage, seat }) {
     const inHand = makeBottle('avatar_bottle_mesh'); inHand.rotation.x = Math.PI / 2; inHand.position.set(0, 0, -0.09); mug.add(inHand);
     attach(mug, [0.03, -0.085, 0.0]);
     const deskBottle = makeBottle('desk_water_bottle'); deskBottle.position.set(0.93, 0.7775, -1.0); root.add(deskBottle);
+    const paperGeo = new T.IcosahedronGeometry(0.034, 0), paperMat = new T.MeshStandardMaterial({ color: 0xf3f1ea, roughness: 0.95, flatShading: true, emissive: 0xf3f1ea, emissiveIntensity: 0.18 });
+    const handBall = new T.Mesh(paperGeo, paperMat); handBall.name = 'avatar_paper_hand'; handBall.castShadow = true;
+    attach(handBall, [0.035, -0.08, 0.02]);
     const phone = new T.Group(); phone.name = 'avatar_phone';
     phone.add(new T.Mesh(new T.BoxGeometry(0.074, 0.15, 0.01), propMat(0x0e0f12, 0.05)));
     const ps = new T.Mesh(new T.PlaneGeometry(0.066, 0.14), new T.MeshBasicMaterial({ color: 0x9fd0ff, toneMapped: false })); ps.position.z = 0.0056; phone.add(ps);
@@ -173,11 +199,12 @@ export function createAvatar({ T, stage, seat }) {
     /* states: type | sit | walk | stand | standing_up | sitting_down | swivel | climb_in | climb | climb_down | climb_end | to_bed | inbed | from_bed */
     let state = 'type', transT = 0, path = [], faceAfter = 0, onArrive = null, where = 'seat';
     let gesture = null, gStart = 0, gW = 0, last = nowS(), nextBlink = 2, nextAuto = nowS() + 20;
-    let conversing = false, nextHuman = 0, standUntil = 0;
+    let conversing = false, nextHuman = 0, standUntil = 0, holdUntil = 0, curMode = null, awayNote = '', fade = 1, fadeTarget = 1;
+    let tossActive = false, tossQueue = 0, tossUntil = 0, tossReleased = false, tossWaiting = false; const balls = [], score = { made: 0, tried: 0 };
     let chairYaw = YAW_DESK, chairYawTarget = YAW_DESK, chairSlide = DESK_SLIDE, chairSlideTarget = DESK_SLIDE, swivelThen = null;
     const SPEED = 0.85, TRANS = 1.15;
     const v2 = (a) => new T.Vector3(a[0], 0, a[1]);
-    const viaBack = () => (where === 'desk' || where === 'door') ? SPOTS[where].via.slice().reverse().map(v2) : [];
+    const viaBack = () => (where === 'desk' || where === 'door') ? SPOTS[where].via.slice().reverse().map(v2) : where === 'exit' ? [v2([0.25, 1.3])] : [];
     const seated = () => state === 'type' || state === 'sit' || state === 'swivel';
     const onChair = () => seated() || state === 'sitting_down' || state === 'standing_up';
 
@@ -196,15 +223,19 @@ export function createAvatar({ T, stage, seat }) {
       const doit = () => { swivel(YAW_DESK, DESK_SLIDE, () => startTyping()); };
       if (state === 'sit') doit(); else goSit(doit);
     }
-    /* turn away from the desk to face the room (typing -> sitting) */
-    function faceRoom(then) {
-      if (state === 'sit') { if (then) then(); return; }
-      if (state === 'type') {
+    /* swivel the chair (from typing or sitting) to face `yaw`; ends in state 'sit' */
+    function faceYaw(yaw, then) {
+      if (state === 'sit') {
+        if (Math.abs(angDiff(yaw, chairYaw)) < 0.04) { if (then) then(); }
+        else swivel(yaw, 0, () => { state = 'sit'; if (then) then(); });
+      } else if (state === 'type') {
         setBase('typeToSit', { once: true, fade: 0.25 }); state = 'swivel'; swivelThen = null; chairYawTarget = chairYaw; chairSlideTarget = chairSlide;
-        onBaseEnd = () => { setBase('sitIdle', { fade: 0.3 }); swivel(YAW_OUT, 0, () => { state = 'sit'; if (then) then(); }); };
+        onBaseEnd = () => { setBase('sitIdle', { fade: 0.3 }); swivel(yaw, 0, () => { state = 'sit'; if (then) then(); }); };
       } else if (then) then();
     }
+    const faceRoom = (then) => faceYaw(YAW_OUT, then);
     function standUp(then) {
+      if (state === 'sit' && Math.abs(angDiff(YAW_OUT, chairYaw)) > 0.04) { faceYaw(YAW_OUT, () => standUp(then)); return; }
       if (state === 'sit') { state = 'standing_up'; transT = 0; setBase('idle', { fade: TRANS }); onArrive = then || null; }
       else if (state === 'type' || state === 'swivel') faceRoom(() => standUp(then));
       else if (state === 'standing_up') onArrive = then || null;
@@ -216,6 +247,7 @@ export function createAvatar({ T, stage, seat }) {
       else if (state === 'sitting_down') onArrive = () => standUp(then);
       else if (state === 'standing_up') onArrive = then || null;
       else if (state === 'inbed') { leaveBed(then); }
+      else if (state === 'away') comeBack(then);
       else if (state === 'climb_in' || state === 'climb' || state === 'to_bed') bedQueue = then || (() => {});
       else if (state === 'from_bed' || state === 'climb_down' || state === 'climb_end') onArrive = then || null;
       else if (then) then();
@@ -245,7 +277,74 @@ export function createAvatar({ T, stage, seat }) {
     }
     function wander() {
       const keys = Object.keys(SPOTS).filter(k => k !== where && k !== 'ladder'); const k = pickOne(keys);
-      walkTo(k, () => { setTimeout(() => { if (state === 'stand' && where === k) goType(); }, 9000 + Math.random() * 6000); });
+      walkTo(k, () => { setTimeout(() => { if (state === 'stand' && where === k && !conversing) goHome(); }, 9000 + Math.random() * 6000); });
+    }
+
+    /* ---------- daily routine on the owner's clock (Vancouver). `?time=08:50` previews any moment ---------- */
+    const TZ = 'America/Vancouver';
+    const clockFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false });
+    let clockOffset = 0;
+    function ownerClock() {
+      const parts = {}; for (const pt of clockFmt.formatToParts(new Date(Date.now() + clockOffset))) parts[pt.type] = pt.value;
+      const dayQ = new URLSearchParams(location.search).get('day');   // ?day=weekday|weekend for previews
+      return { mins: (Number(parts.hour) % 24) * 60 + Number(parts.minute), weekend: dayQ ? dayQ === 'weekend' : (parts.weekday === 'Sat' || parts.weekday === 'Sun') };
+    }
+    { const q = new URLSearchParams(location.search).get('time'); if (q && /^\d{1,2}:\d{2}$/.test(q)) { const [h, m] = q.split(':').map(Number); clockOffset = ((h * 60 + m) - ownerClock().mins) * 60000; } }
+    const H = (h, m = 0) => h * 60 + m;
+    const WEEKDAY = [[0, 'sleep', 'Asleep — up around 7:40'], [H(7, 40), 'wake'], [H(8), 'morning'], [H(8, 30), 'work'], [H(8, 55), 'away', 'School drop-off — back around 9:25'],
+      [H(9, 25), 'work'], [H(12, 15), 'away', 'Out for lunch — back at 1:00'], [H(13), 'work'], [H(17, 15), 'evening'], [H(22, 45), 'sleep', 'Asleep — up around 7:40']];
+    const WEEKEND = [[0, 'sleep', 'Asleep — it is the weekend'], [H(8, 30), 'wake'], [H(9), 'evening'], [H(23, 15), 'sleep', 'Asleep — it is the weekend']];
+    function modeNow() { const c = ownerClock(), tbl = c.weekend ? WEEKEND : WEEKDAY; let cur = tbl[0]; for (const row of tbl) if (c.mins >= row[0]) cur = row; return { mode: cur[1], note: cur[2] || '' }; }
+    const stable = () => ['sit', 'type', 'stand', 'inbed', 'away'].includes(state);
+    function goHome() { if (curMode === 'work') goType(); else if (curMode === 'sleep') goBed(); else if (curMode === 'away') goAway(awayNote); else goSit(() => faceYaw(YAW_OUT)); }
+    function enterMode(m) {
+      awayNote = m.note;
+      if (m.mode === 'sleep') goBed();
+      else if (m.mode === 'away') goAway(m.note);
+      else if (m.mode === 'work') goType();
+      else if (m.mode === 'wake') ensureStanding(() => play('stretch'));
+      else goSit(() => faceYaw(YAW_OUT));
+    }
+    const pickW = (list) => { let r = Math.random() * list.reduce((a, x) => a + x[1], 0); for (const x of list) { r -= x[1]; if (r <= 0) return x[0]; } return list[0][0]; };
+    function activity() {
+      if (curMode === 'sleep' || curMode === 'away') { if (state !== 'inbed' && state !== 'away') goHome(); return; }
+      if (curMode === 'work' && state !== 'type') { goType(); return; }
+      if (state === 'stand') { if (Math.random() < 0.5) goHome(); else play(pickW([['drink', 3], ['phone', 3], ['laugh', 1], ['think', 2], ['neck', 1]])); return; }
+      if (curMode !== 'work' && state === 'type') { faceRoom(); return; }
+      const a = curMode === 'work'
+        ? pickW([['drink', 24], ['think', 10], ['neck', 10], ['laugh', 9], ['phone', 13], ['stretch', 12], ['wander', 14], ['window', 8]])
+        : pickW([['phone', 30], ['drink', 18], ['laugh', 10], ['think', 8], ['stretch', 10], ['wander', 16], ['window', 8]]);
+      if (a === 'wander') wander(); else if (a === 'window') walkTo('window', () => setTimeout(() => { if (state === 'stand' && !conversing) goHome(); }, 8000 + Math.random() * 6000)); else play(a);
+    }
+    /* out of the room: walk off over the front edge, fade; come back the same way */
+    function goAway(note) {
+      awayNote = note || awayNote; if (state === 'away') return;
+      ensureStanding(() => { path = [...viaBack(), v2([0.25, 1.3]), EXIT.clone()]; faceAfter = 0; state = 'walk'; where = 'exit'; setBase('walk', { fade: 0.3, timeScale: 0.85 }); onArrive = () => { state = 'away'; fadeTarget = 0; }; });
+    }
+    function comeBack(then) { rig.position.copy(EXIT); rig.rotation.set(0, Math.PI, 0); fadeTarget = 1; state = 'stand'; where = 'exit'; setBase('idle', { fade: 0.2 }); if (then) then(); }
+
+    /* ---------- paper toss ---------- */
+    const tossYaw = () => Math.atan2(BASKET.x - SEAT.x, BASKET.z - SEAT.z);
+    function toss() {
+      if (['away', 'inbed', 'to_bed', 'from_bed', 'climb', 'climb_in', 'climb_down', 'climb_end'].includes(state)) return { ok: false, reason: state === 'away' ? 'away' : 'asleep' };
+      tossQueue = Math.min(3, tossQueue + 1); tossUntil = nowS() + 12;
+      if (!tossActive) { tossActive = true; const go = () => faceYaw(tossYaw(), throwOne); if (state === 'sit' || state === 'type') go(); else goSit(go); }
+      return { ok: true };
+    }
+    function throwOne() { if (state !== 'sit') { tossActive = false; tossQueue = 0; return; } tossQueue = Math.max(0, tossQueue - 1); tossReleased = false; tossWaiting = true; play('toss'); }
+    function launchBall() {
+      handBall.updateWorldMatrix(true, false); const p0 = new T.Vector3().setFromMatrixPosition(handBall.matrixWorld); root.worldToLocal(p0);
+      const good = Math.random() < 0.62, ang = Math.random() * Math.PI * 2, rad = good ? Math.random() * BASKET_R * 0.75 : BASKET_R + 0.06 + Math.random() * 0.22;
+      const target = new T.Vector3(BASKET.x + Math.cos(ang) * rad, BASKET.y, BASKET.z + Math.sin(ang) * rad), TT = 0.82, g = 9.8;
+      const m = new T.Mesh(paperGeo, paperMat); m.name = 'paper_ball'; m.castShadow = true; m.position.copy(p0); m.raycast = () => {}; root.add(m);
+      balls.push({ m, v: new T.Vector3((target.x - p0.x) / TT, (target.y - p0.y + 0.5 * g * TT * TT) / TT, (target.z - p0.z) / TT), spin: new T.Vector3(Math.random() * 9, Math.random() * 9, Math.random() * 9), decided: false, rest: false, inside: false, born: nowS() });
+      if (balls.length > 9) { const old = balls.shift(); root.remove(old.m); }
+    }
+    function tossResult(made) {
+      score.tried++; if (made) score.made++; tossWaiting = false;
+      say(made ? pickOne(['Swish! 🗑️', 'Nothing but bin', 'Too easy', 'Got it!']) : pickOne(['So close…', 'Rim out!', 'Wind. Definitely the wind.', 'Warm-up shot']), 2.6);
+      if (api.onToss) { try { api.onToss({ ...score, made_last: made }); } catch (e) {} }
+      setTimeout(() => { if (tossQueue > 0 && state === 'sit') throwOne(); }, 900);
     }
 
     let fullClip = null, fullAfter = null;
@@ -266,12 +365,16 @@ export function createAvatar({ T, stage, seat }) {
       }
       gesture = { ...g, name, dur: dur || g.dur || (g.clip ? clips[g.clip].duration * (g.loops || 1) : 3), s: g.clip ? sampler(g.clip) : null }; gStart = nowS();
       mug.visible = g.prop === 'bottle'; deskBottle.visible = !mug.visible; phone.visible = g.prop === 'phone';
-      if (state === 'type') faceRoom();          // look at the visitor for gestures
+      if (state === 'type' && conversing) faceRoom();   // turn to the visitor only when someone is actually talking to him
       return true;
     }
 
     /* initial pose: typing at the desk */
     placeOnChair(); setBase('typing');
+    { const m0 = modeNow(); curMode = m0.mode; awayNote = m0.note;
+      if (m0.mode === 'sleep') { chairYaw = chairYawTarget = YAW_OUT; chairSlide = chairSlideTarget = 0; state = 'inbed'; where = 'ladder'; rig.position.copy(BED_LIE); rig.quaternion.copy(Q(0, BED_YAW, 0)); setBase('lieDown', { once: true, from: -0.05, fade: 0 }); }
+      else if (m0.mode === 'away') { chairYaw = chairYawTarget = YAW_OUT; chairSlide = chairSlideTarget = 0; state = 'away'; where = 'exit'; rig.position.copy(EXIT); fade = 0.02; fadeTarget = 0; setBase('idle', { fade: 0 }); }   // the fade pass hides him on the first frame
+      else if (m0.mode !== 'work') { chairYaw = chairYawTarget = YAW_OUT; chairSlide = chairSlideTarget = 0; state = 'sit'; placeOnChair(); setBase('sitIdle', { fade: 0 }); } }
 
     const headPos = new T.Vector3(), camLocal = new T.Vector3(), tq = new T.Quaternion(), tv = new T.Vector3(), lieQ = Q(-Math.PI / 2, 0, 0), topQ = new T.Quaternion(), tmpV = new T.Vector3();
     const LADDER_TOP = new T.Vector3(climbX(CLIMB_Y1), CLIMB_Y1, LADDER_FOOT.z);
@@ -279,6 +382,7 @@ export function createAvatar({ T, stage, seat }) {
       const now = nowS(), dt = Math.min(0.1, now - last); last = now;
 
       /* --- chair + locomotion --- */
+      if (chair && !onChair()) { chair.rotation.y = chairYaw; chair.position.copy(chairHome).addScaledVector(yawFwd(chairYaw), chairSlide); }
       if (state === 'swivel') {
         const a = 1 - Math.exp(-dt * 3.5);
         chairYaw += angDiff(chairYawTarget, chairYaw) * a; chairSlide += (chairSlideTarget - chairSlide) * a;
@@ -324,6 +428,32 @@ export function createAvatar({ T, stage, seat }) {
       }
       mixer.update(dt);
 
+      /* --- paper toss: ball grows in the hands, leaves at the release frame --- */
+      if (gesture && gesture.name === 'toss') {
+        const tt = now - gStart; handBall.visible = tt > 0.2 && !tossReleased; handBall.scale.setScalar(clamp((tt - 0.2) / 0.6, 0.25, 1));
+        if (!tossReleased && tt >= 1.53) { tossReleased = true; handBall.visible = false; launchBall(); }
+      } else handBall.visible = false;
+      for (const b of balls) {
+        if (b.rest) continue;
+        const pm = b.m.position, prevY = pm.y; b.v.y -= 9.8 * dt; pm.addScaledVector(b.v, dt);
+        b.m.rotation.x += b.spin.x * dt; b.m.rotation.y += b.spin.y * dt;
+        const dx = pm.x - BASKET.x, dz = pm.z - BASKET.z, dist = Math.hypot(dx, dz);
+        if (!b.decided && b.v.y < 0 && prevY >= BASKET.y && pm.y < BASKET.y) { b.decided = true; b.inside = dist < BASKET_R; tossResult(b.inside); }
+        if (b.inside) { if (dist > BASKET_R - 0.04) { pm.x = BASKET.x + dx / dist * (BASKET_R - 0.04); pm.z = BASKET.z + dz / dist * (BASKET_R - 0.04); b.v.x *= -0.2; b.v.z *= -0.2; } if (pm.y < 0.07) { pm.y = 0.07; b.rest = true; } }
+        else {
+          if (pm.y < 0.05) { pm.y = 0.05; if (!b.decided) { b.decided = true; tossResult(false); } if (Math.abs(b.v.y) < 0.6) { b.rest = true; } else { b.v.y *= -0.42; b.v.x *= 0.55; b.v.z *= 0.55; b.spin.multiplyScalar(0.5); } }
+          if (pm.x > 2.47) { pm.x = 2.47; b.v.x *= -0.4; } if (pm.z < -1.7) { pm.z = -1.7; b.v.z *= -0.4; }
+        }
+      }
+      if (tossActive && !tossWaiting && !gesture && tossQueue === 0 && now > tossUntil) { tossActive = false; curMode = null; }
+
+      /* --- fade in / out when he leaves or returns --- */
+      if (fade !== fadeTarget) {
+        fade += clamp(fadeTarget - fade, -dt / 0.6, dt / 0.6); if (Math.abs(fade - fadeTarget) < 0.01) fade = fadeTarget;
+        model.traverse(o => { if (o.isMesh) { const mt = o.material; if (mt.userData.baseTransparent === undefined) { mt.userData.baseTransparent = mt.transparent; mt.userData.baseOpacity = mt.opacity; } mt.transparent = fade < 1 ? true : mt.userData.baseTransparent; mt.opacity = mt.userData.baseOpacity * fade; } });
+        model.visible = fade > 0.01;
+      }
+
       /* --- gesture layer --- */
       let faceMode = state === 'inbed' || state === 'to_bed' ? 'closed' : 'neutral', look = 0;
       if (gesture) {
@@ -345,7 +475,7 @@ export function createAvatar({ T, stage, seat }) {
           faceMode = gesture.face || 'neutral'; look = gesture.look ? k : 0;
           const w = smooth(clamp(gW, 0, 1));
           if (gesture.s) gesture.s.apply(((gesture.from || 0) + t) % gesture.s.duration, w);
-          else if (gesture.pose) { const p = gesture.pose(t); for (const j in p) { const n = JOINT[j]; if (bones[n]) bones[n].quaternion.slerp(targetLocal(n, p[j], tq), w); } }
+          else if (gesture.pose) { const p = gesture.pose(t); for (const j in p) { const n = JOINT[j]; if (bones[n]) bones[n].quaternion.slerp(targetLocal(n, p[j], tq), w * (p[j][3] === undefined ? 1 : p[j][3])); } }
         }
       } else { gW += (0 - gW) * (1 - Math.exp(-dt * 8)); if (gW < 0.01 && !gesture) { mug.visible = phone.visible = false; deskBottle.visible = true; } }
       /* head turns toward whoever is watching during social gestures / while sitting facing the room */
@@ -367,7 +497,7 @@ export function createAvatar({ T, stage, seat }) {
       morph('eyeBlinkLeft', bl); morph('eyeBlinkRight', bl); morph('mouthSmile', face.smile); morph('browInnerUp', face.brow); morph('jawOpen', Math.max(0, face.jaw)); morph('viseme_aa', Math.max(0, face.aa)); morph('viseme_O', Math.max(0, face.oo)); morph('cheekSquintLeft', face.smile * 0.5); morph('cheekSquintRight', face.smile * 0.5);
 
       /* --- shadow, bubble, idle behaviour --- */
-      blob.position.x = rig.position.x; blob.position.z = rig.position.z; blob.material.opacity = (onChair() ? 0.25 : 1) * clamp(1 - rig.position.y / 0.4, 0, 1);
+      blob.position.x = rig.position.x; blob.position.z = rig.position.z; blob.material.opacity = (onChair() ? 0.25 : 1) * clamp(1 - rig.position.y / 0.4, 0, 1) * fade;
       if (now < bubbleUntil) {
         bones.Head.getWorldPosition(headPos); headPos.y += 0.3; headPos.project(stage._camera);
         const r = stage.getBoundingClientRect();
@@ -385,13 +515,19 @@ export function createAvatar({ T, stage, seat }) {
           else if (r < 0.84) play('stretch');
           else play('think');
         }
-      } else if (now > nextAuto && !gesture && (state === 'sit' || state === 'type' || state === 'stand' || state === 'inbed')) {
-        nextAuto = now + 25 + Math.random() * 20;
-        if (state === 'inbed') { say('Alright, back to work', 3); goType(); }
-        else if (state === 'sit') goType();
-        else if (state === 'stand') goType();
-        else { const r = Math.random(); if (r < 0.3) wander(); else if (r < 0.4) goBed(); else if (r < 0.7) play(pickOne(['stretch', 'neck', 'drink', 'phone'])); }
+      } else if (now > holdUntil && !gesture && !tossActive && stable()) {
+        const m = modeNow();
+        if (m.mode !== curMode) { curMode = m.mode; enterMode(m); nextAuto = now + 20; }
+        else if (now > nextAuto) { nextAuto = now + 30 + Math.random() * 55; activity(); }
       }
+      /* a note where he would be, so visitors know why the room is empty / quiet */
+      const showNote = (state === 'away' || (state === 'inbed' && curMode === 'sleep')) && !conversing && awayNote;
+      if (showNote) {
+        note.textContent = (state === 'away' ? '🚪 ' : '💤 ') + awayNote;
+        headPos.copy(state === 'away' ? SEAT : BED_LIE); headPos.y = state === 'away' ? 1.25 : 2.15; if (state !== 'away') headPos.z = -0.1; root.localToWorld(headPos); headPos.project(stage._camera);
+        const r = stage.getBoundingClientRect(); note.style.left = (r.left + (headPos.x + 1) / 2 * r.width) + 'px'; note.style.top = (r.top + (1 - headPos.y) / 2 * r.height) + 'px';
+      }
+      note.style.opacity = showNote ? '1' : '0';
     };
 
     /* ---------- text commands ---------- */
@@ -432,31 +568,17 @@ export function createAvatar({ T, stage, seat }) {
       for (const [re, act, lines] of RULES) if (re.test(low)) { play(act); say(pickOne(lines)); return; }
       play('shrug'); say('Try: walk, window, desk, bed, sit, work, wave, dance, water… or "say <anything>"', 5.5);
     };
-    api.converse = (on) => { conversing = !!on; nextHuman = nowS() + 10 + Math.random() * 10; if (!on) nextAuto = nowS() + 6; };
-    api.hold = (secs) => { nextAuto = nowS() + secs; };   // keep the idle behaviour away while someone is talking to him
+    api.converse = (on) => { conversing = !!on; nextHuman = nowS() + 10 + Math.random() * 10; if (!on) { curMode = null; holdUntil = nowS() + 5; } };
+    api.hold = (secs) => { holdUntil = nowS() + secs; };   // pause the routine (e.g. while a job is running)
+    api.toss = toss; api.score = () => ({ ...score }); api.mode = () => ({ ...modeNow(), state });
     api.play = play; api.say = say; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.type = goType; api.bed = goBed; api.up = ensureStanding;
     api.state = () => ({ state, where, base: base && base.getClip().name, chairYaw: +chairYaw.toFixed(2) });
     api._dbg = { clips, sampler, mixer, setBase, rest, actions };
     api.debugClip = (name, opts) => { state = 'stand'; rig.position.set(0.35, 0, 1.1); rig.rotation.set(0, 0.15, 0); setBase(name, opts || {}); };
     api.ready = true;
-    setTimeout(() => api.command('hi'), 1500);
+    setTimeout(() => { if (state === 'sit') { play('wave'); say('Hey! 👋 Welcome to my room', 4); } else if (state === 'type') say('Hey! 👋 Click me to talk', 5); }, 1500);
   })().catch((e) => console.warn('avatar failed to load', e));
 
-  /* ---------- control bar ---------- */
-  const bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;left:16px;bottom:52px;z-index:45;display:flex;flex-wrap:wrap;gap:6px;align-items:center;max-width:min(640px,calc(100vw - 32px));font:500 12px/1 system-ui,sans-serif';
-  const chipCss = 'cursor:pointer;border:1px solid rgba(255,255,255,.14);background:rgba(12,14,20,.78);color:#e9ecf3;padding:7px 10px;border-radius:999px;font:inherit;backdrop-filter:blur(6px)';
-  [['💻', 'work'], ['🚶', 'walk'], ['🪑', 'sit'], ['👋', 'wave'], ['🕺', 'dance'], ['💧', 'drink'], ['🙆', 'stretch'], ['📱', 'phone'], ['😂', 'laugh'], ['😴', 'sleep']].forEach(([icon, act]) => {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = icon; b.title = act; b.setAttribute('aria-label', act); b.style.cssText = chipCss;
-    b.addEventListener('click', () => api.command(act)); bar.appendChild(b);
-  });
-  const input = document.createElement('input');
-  input.type = 'text'; input.placeholder = 'Tell me what to do…  ("go to window", "drink water", "say hi")'; input.maxLength = 120; input.setAttribute('aria-label', 'Tell the avatar what to do');
-  input.style.cssText = chipCss + ';cursor:text;flex:1 1 220px;min-width:0;outline:none;border-radius:12px;padding:9px 12px;font-size:13px';
-  ['keydown', 'keyup', 'keypress'].forEach(ev => input.addEventListener(ev, e => e.stopPropagation()));
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { api.command(input.value); input.value = ''; } });
-  bar.appendChild(input);
-  document.body.appendChild(bar);
 
   return api;
 }

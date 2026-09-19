@@ -12,6 +12,8 @@ export function initSRE({ T, stage, avatar, screens }) {
   css.textContent = `
   .sre-launch{position:fixed;right:16px;top:16px;z-index:60;cursor:pointer;border:1px solid rgba(255,255,255,.16);background:rgba(12,14,20,.82);color:#e9ecf3;padding:10px 14px;border-radius:999px;font:600 13px/1 system-ui,sans-serif;backdrop-filter:blur(6px)}
   .sre-launch b{color:#7ee0b3;font-weight:600}
+  .sre-toss{position:fixed;right:16px;top:62px;z-index:60;cursor:pointer;border:1px solid rgba(255,255,255,.16);background:rgba(12,14,20,.82);color:#e9ecf3;padding:9px 13px;border-radius:999px;font:600 12.5px/1 system-ui,sans-serif;backdrop-filter:blur(6px)}
+  .sre-toss span{color:#ffc46b;margin-left:6px;font-variant-numeric:tabular-nums}
   .sre-panel{position:fixed;right:16px;top:16px;bottom:16px;width:min(390px,calc(100vw - 32px));z-index:61;display:none;flex-direction:column;background:rgba(11,13,19,.94);color:#e9ecf3;border:1px solid rgba(255,255,255,.12);border-radius:16px;font:400 14px/1.45 system-ui,sans-serif;box-shadow:0 20px 60px rgba(0,0,0,.55);backdrop-filter:blur(10px);overflow:hidden}
   .sre-panel.open{display:flex}
   @media (max-width:640px){.sre-panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:64vh}}
@@ -43,6 +45,11 @@ export function initSRE({ T, stage, avatar, screens }) {
   head.append(title, badge, x);
   const tickets = el('div', 'sre-tickets'), msgs = el('div', 'sre-msgs'), foot = el('div', 'sre-foot');
   panel.append(head, tickets, msgs, foot); document.body.append(launch, panel);
+  /* paper toss: every click makes Sid crumple a sheet and shoot for the waste basket */
+  const tossBtn = el('button', 'sre-toss'); tossBtn.type = 'button'; tossBtn.innerHTML = '🗑️ Paper toss<span></span>'; tossBtn.title = 'Make Sid throw a paper ball at the bin';
+  const tossScore = tossBtn.querySelector('span'); document.body.append(tossBtn);
+  avatar.onToss = (sc) => { tossScore.textContent = sc.made + ' / ' + sc.tried; };
+  tossBtn.onclick = () => { const r = av('toss'); if (r && !r.ok) { tossScore.textContent = r.reason === 'away' ? 'Sid is out' : 'Sid is asleep'; setTimeout(() => { const sc = av('score'); tossScore.textContent = sc && sc.tried ? sc.made + ' / ' + sc.tried : ''; }, 2500); } };
   ['keydown', 'keyup', 'keypress', 'wheel', 'pointerdown'].forEach(ev => panel.addEventListener(ev, e => e.stopPropagation()));
 
   function addMsg(role, text) { const m = el('div', 'sre-m ' + (role === 'user' ? 'u' : role === 'assistant' ? 'a' : 's'), text); msgs.appendChild(m); msgs.scrollTop = msgs.scrollHeight; return m; }
@@ -180,7 +187,7 @@ export function initSRE({ T, stage, avatar, screens }) {
 
   /* ---------- open / close ---------- */
   function setOpen(v) {
-    open = v; panel.classList.toggle('open', v); launch.style.display = v ? 'none' : '';
+    open = v; panel.classList.toggle('open', v); launch.style.display = v ? 'none' : ''; tossBtn.style.display = v ? 'none' : '';
     if (v) { if (!messages.length && invite) greet(); av('converse', true); av('sit', () => av('play', 'wave')); renderFoot(); }
     else av('converse', false);
   }
