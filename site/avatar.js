@@ -199,6 +199,7 @@ export function createAvatar({ T, stage, seat }) {
     /* states: type | sit | walk | stand | standing_up | sitting_down | swivel | climb_in | climb | climb_down | climb_end | to_bed | inbed | from_bed */
     let state = 'type', transT = 0, path = [], faceAfter = 0, onArrive = null, where = 'seat';
     let gesture = null, gStart = 0, gW = 0, last = nowS(), nextBlink = 2, nextAuto = nowS() + 20;
+    let voiceOn = false, voiceLevel = 0;
     let conversing = false, nextHuman = 0, standUntil = 0, holdUntil = 0, curMode = null, awayNote = '', fade = 1, fadeTarget = 1;
     let tossActive = false, tossQueue = 0, tossUntil = 0, tossReleased = false, tossWaiting = false; const balls = [], score = { made: 0, tried: 0 };
     let chairYaw = YAW_DESK, chairYawTarget = YAW_DESK, chairSlide = DESK_SLIDE, chairSlideTarget = DESK_SLIDE, swivelThen = null;
@@ -492,7 +493,8 @@ export function createAvatar({ T, stage, seat }) {
       const blinking = nextBlink - now < 0.13 ? 1 : 0;
       const talking = faceMode === 'talk' || faceMode === 'laugh';
       const want = { blink: blinking, closed: faceMode === 'closed' || faceMode === 'laugh' ? 1 : 0, smile: faceMode === 'smile' ? 0.7 : faceMode === 'laugh' ? 1 : (state === 'type' ? 0.05 : 0.12), brow: faceMode === 'brow' ? 0.8 : faceMode === 'smile' ? 0.3 : 0, jaw: talking ? 0.18 + S(now * 15) * 0.16 : 0, aa: talking ? 0.35 + S(now * 11) * 0.35 : 0, oo: talking ? 0.3 + S(now * 7 + 1) * 0.3 : 0 };
-      for (const k in face) face[k] += (want[k] - face[k]) * (1 - Math.exp(-dt * (k === 'blink' ? 40 : 12)));
+      if (voiceOn) { want.jaw = voiceLevel * 0.55; want.aa = voiceLevel * 0.5; want.oo = voiceLevel * 0.3 * (0.5 + 0.5 * S(now * 9)); want.smile = Math.max(want.smile, 0.15); }   // lips follow the actual speech audio
+      for (const k in face) face[k] += (want[k] - face[k]) * (1 - Math.exp(-dt * (k === 'blink' ? 40 : voiceOn && k !== 'smile' && k !== 'brow' ? 30 : 12)));
       const bl = Math.max(face.blink, face.closed);
       morph('eyeBlinkLeft', bl); morph('eyeBlinkRight', bl); morph('mouthSmile', face.smile); morph('browInnerUp', face.brow); morph('jawOpen', Math.max(0, face.jaw)); morph('viseme_aa', Math.max(0, face.aa)); morph('viseme_O', Math.max(0, face.oo)); morph('cheekSquintLeft', face.smile * 0.5); morph('cheekSquintRight', face.smile * 0.5);
 
@@ -570,6 +572,7 @@ export function createAvatar({ T, stage, seat }) {
     };
     api.converse = (on) => { conversing = !!on; nextHuman = nowS() + 10 + Math.random() * 10; if (!on) { curMode = null; holdUntil = nowS() + 5; } };
     api.hold = (secs) => { holdUntil = nowS() + secs; };   // pause the routine (e.g. while a job is running)
+    api.speaking = (on) => { voiceOn = !!on; if (!on) voiceLevel = 0; }; api.mouth = (v) => { voiceLevel = v; };
     api.toss = toss; api.score = () => ({ ...score }); api.mode = () => ({ ...modeNow(), state });
     api.play = play; api.say = say; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.type = goType; api.bed = goBed; api.up = ensureStanding;
     api.state = () => ({ state, where, base: base && base.getClip().name, chairYaw: +chairYaw.toFixed(2) });

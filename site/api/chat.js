@@ -22,14 +22,15 @@ const TOOLS = [
     parameters: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ACTIONS } } } } },
 ];
 
-function systemPrompt(jobTokens) {
+function systemPrompt(jobTokens, voice) {
   const { persona, skills } = readSkills();
   const jobs = (jobTokens || []).map(verifyJob).filter(Boolean).slice(-5).map(j => { const s = jobStatus(j); return `- ${s.id} (${s.skill}): ${s.stageLabel}${s.done ? ' — outputs: ' + JSON.stringify(s.outputs) : ''}`; });
   return [
     persona,
     '# Skills you can execute\n' + (skills.map(s => `## ${s.name}\n${s.text}`).join('\n\n') || '(none loaded)'),
     `# System context\nmode: ${MODE}\ndate: ${new Date().toISOString().slice(0, 10)}\nvisitor tickets:\n${jobs.join('\n') || '- none yet'}`,
-  ].join('\n\n');
+    voice ? '# Voice conversation\nThe visitor is talking to you out loud and your reply will be spoken in your voice. Answer the way you would say it across a desk: one or two short sentences, contractions, no lists, no emoji, no symbols or markdown, numbers the way people say them. Their words come from speech recognition, so forgive small transcription mistakes and ask if something is unclear.' : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 async function callOpenAI(messages) {
@@ -62,7 +63,7 @@ module.exports = async (req, res) => {
     .map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
   if (!history.length || history[history.length - 1].role !== 'user') { res.status(400).json({ error: 'last message must be from the user' }); return; }
 
-  const messages = [{ role: 'system', content: systemPrompt(body.jobs) }, ...history];
+  const messages = [{ role: 'system', content: systemPrompt(body.jobs, !!body.voice) }, ...history];
   const actions = []; let job = null, reply = '';
   try {
     for (let round = 0; round < 4; round++) {

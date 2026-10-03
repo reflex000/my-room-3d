@@ -2,6 +2,8 @@
    Backend: /api/chat (LLM + skills + validation) and /api/job (ticket status). Step 1 runs a simulated pipeline.
    Usage (room.js): import('./sre.js').then(m => m.initSRE({ T, stage, avatar, screens })); */
 
+import { createVoice } from './voice.js';
+
 export function initSRE({ T, stage, avatar, screens }) {
   const LS = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
   let pending = null, invite = LS.get('sre.invite', ''), jobs = LS.get('sre.jobs', []), status = {}, messages = [], busy = false, open = false, polling = null, announced = new Set(LS.get('sre.announced', []));
@@ -35,13 +37,17 @@ export function initSRE({ T, stage, avatar, screens }) {
   .sre-foot{display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08)}
   .sre-foot textarea,.sre-foot input{flex:1;resize:none;background:rgba(255,255,255,.06);color:#e9ecf3;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:9px 11px;font:inherit;outline:none;min-width:0}
   .sre-foot button{cursor:pointer;border:0;border-radius:10px;padding:0 14px;background:#3fb98f;color:#06130d;font:600 13px/1 system-ui,sans-serif}
-  .sre-foot button:disabled{opacity:.5;cursor:default}`;
+  .sre-foot button:disabled{opacity:.5;cursor:default}
+  .sre-foot .sre-mic{background:rgba(255,255,255,.08);color:#e9ecf3;border:1px solid rgba(255,255,255,.16);padding:0 12px;font-size:17px;transition:box-shadow .08s}
+  .sre-foot .sre-mic.on{background:#d6455d;border-color:#d6455d;color:#fff}
+  .sre-foot .sre-mic.speak{background:#2a5bd7;border-color:#2a5bd7;color:#fff}
+  .sre-sub{font:500 11px/1.2 system-ui,sans-serif;color:#8d97aa;margin-top:2px}`;
   document.head.appendChild(css);
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const launch = el('button', 'sre-launch'); launch.type = 'button'; launch.innerHTML = '💬 Talk to Sid · <b>SRE desk</b>';
   const panel = el('section', 'sre-panel'); panel.setAttribute('aria-label', 'SRE desk chat');
-  const head = el('div', 'sre-head'); const title = el('h2', null, 'Sid · SRE desk'); const badge = el('span', 'sre-badge', 'simulated'); const x = el('button', 'sre-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Close');
+  const head = el('div', 'sre-head'); const title = el('h2', null, 'Sid · SRE desk'); const sub = el('div', 'sre-sub', 'AI version of Sid — type or tap the mic and talk'); title.appendChild(sub); const badge = el('span', 'sre-badge', 'simulated'); const x = el('button', 'sre-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Close');
   head.append(title, badge, x);
   const tickets = el('div', 'sre-tickets'), msgs = el('div', 'sre-msgs'), foot = el('div', 'sre-foot');
   panel.append(head, tickets, msgs, foot); document.body.append(launch, panel);
@@ -74,19 +80,57 @@ export function initSRE({ T, stage, avatar, screens }) {
     const b = el('button', null, 'Send'); b.type = 'button'; b.disabled = busy;
     const go = () => { const v = t.value.trim(); if (!v || busy) return; t.value = ''; send(v); };
     b.onclick = go; t.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
-    foot.append(t, b); if (open) t.focus();
+    if (voice.supported) {
+      micBtn = el('button', 'sre-mic' + (vState === 'listening' ? ' on' : vState === 'speaking' ? ' speak' : ''), vState === 'listening' ? '●' : vState === 'speaking' ? '■' : vState === 'thinking' ? '…' : '🎙'); micBtn.type = 'button';
+      micBtn.title = vState === 'idle' ? 'Talk to Sid' : 'Stop'; micBtn.setAttribute('aria-label', micBtn.title); micBtn.onclick = toggleVoice;
+      t.placeholder = vState === 'listening' ? 'Listening… just talk' : vState === 'speaking' ? 'Sid is talking…' : t.placeholder;
+      foot.append(micBtn);
+    }
+    foot.append(t, b); if (open && vState === 'idle') t.focus();
+  }
+
+  /* ---------- voice: mic → /api/stt → chat → /api/tts → speakers, mouth follows the audio ---------- */
+  let vState = 'idle', voiceLoop = false, micBtn = null;
+  const voice = createVoice({ onLevel: (v) => av('mouth', v), onMic: (v) => { if (micBtn && vState === 'listening') micBtn.style.boxShadow = `0 0 0 ${Math.round(v * 10)}px rgba(214,69,93,.25)`; } });
+  const setV = (s) => { vState = s; renderFoot(); };
+  async function speakReply(text) {
+    try {
+      const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, text }) });
+      if (!r.ok) return;
+      const buf = await r.arrayBuffer(); setV('speaking'); av('speaking', true); av('converse', true);
+      await voice.speak(buf);
+    } catch (e) {} finally { av('speaking', false); }
+  }
+  async function voiceConversation() {
+    while (voiceLoop && open) {
+      setV('listening'); let rec = null;
+      try { rec = await voice.listenOnce(); } catch (e) { addMsg('system', 'I could not use the microphone — check the browser permission.'); voiceLoop = false; break; }
+      if (!voiceLoop) break;
+      if (!rec) { voiceLoop = false; break; }                                  // nobody spoke for a while: stop listening
+      setV('thinking');
+      let text = '';
+      try { const r = await fetch('/api/stt', { method: 'POST', headers: { 'content-type': 'application/octet-stream', 'x-invite': invite, 'x-audio-type': rec.type }, body: rec.blob }); const d = await r.json().catch(() => ({})); if (r.status === 401) { invite = ''; LS.set('sre.invite', ''); voiceLoop = false; addMsg('system', 'Enter your invite code first.'); break; } text = (d.text || '').trim(); } catch (e) {}
+      if (!text) continue;
+      await send(text, { voice: true });
+    }
+    setV('idle'); voice.release();
+  }
+  function toggleVoice() {
+    if (!invite) { addMsg('system', 'Enter your invite code first.'); return; }
+    if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); setV('idle'); return; }
+    voice.unlock(); voiceLoop = true; voiceConversation();
   }
 
   function greet() { addMsg('system', 'You walked into Sid\'s SRE shop. Ask for what you need — he will ask the questions an SRE would.'); }
 
   /* ---------- chat ---------- */
   const short = (s) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > 110 ? s.slice(0, 107) + '…' : s; };
-  async function send(text) {
+  async function send(text, opts = {}) {
     messages.push({ role: 'user', content: text }); addMsg('user', text);
     busy = true; renderFoot(); const dots = addMsg('system', 'Sid is thinking…');
     av('converse', true); av('play', 'think', 6);
     try {
-      const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token) }) });
+      const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token), voice: !!opts.voice }) });
       const data = await r.json().catch(() => ({}));
       dots.remove();
       if (r.status === 401) { invite = ''; LS.set('sre.invite', ''); messages.pop(); pending = text; addMsg('system', 'That invite code did not work — enter it again below and I will resend your message.'); }
@@ -95,6 +139,7 @@ export function initSRE({ T, stage, avatar, screens }) {
         badge.textContent = data.mode || 'simulated';
         messages.push({ role: 'assistant', content: data.reply }); addMsg('assistant', data.reply);
         av('say', short(data.reply)); av('play', (data.actions && data.actions[0]) || 'talk', data.actions && data.actions[0] ? undefined : Math.min(6, 2 + data.reply.length * 0.04));
+        if (opts.voice && voiceLoop) { busy = false; await speakReply(data.reply); }
         if (data.job) startJob(data.job);
         else if (jobs.some(j => status[j.id] && !status[j.id].done)) setTimeout(() => av('type'), 7000);   // he answers, then goes back to the job
       }
@@ -189,7 +234,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   function setOpen(v) {
     open = v; panel.classList.toggle('open', v); launch.style.display = v ? 'none' : ''; tossBtn.style.display = v ? 'none' : '';
     if (v) { if (!messages.length && invite) greet(); av('converse', true); av('sit', () => av('play', 'wave')); renderFoot(); }
-    else av('converse', false);
+    else { av('converse', false); if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); } }
   }
   launch.onclick = () => setOpen(true); x.onclick = () => setOpen(false);
 
