@@ -46,24 +46,51 @@ export function createVoice({ onLevel = () => {}, onMic = () => {} } = {}) {
     });
   }
 
-  /* Play encoded audio (ArrayBuffer). Calls onLevel(0..1) every frame; resolves when playback ends or is stopped. */
+  /* Must run inside a click/tap: wakes the AudioContext and plays one silent frame so mobile browsers allow later playback. */
+  function unlock() {
+    const ac = audioCtx();
+    try { const b = ac.createBuffer(1, 1, 22050), s = ac.createBufferSource(); s.buffer = b; s.connect(ac.destination); s.start(0); } catch (e) {}
+    return ac.state;
+  }
+
+  /* Play encoded audio (ArrayBuffer). Calls onLevel(0..1) every frame; resolves when playback ends or is stopped.
+     Web Audio when the context is running (real loudness for the mouth); otherwise an <audio> element with a
+     synthetic level. A hard timeout guarantees the promise settles even if the browser never fires 'ended'. */
   async function speak(arrayBuffer) {
     stopSpeaking();
-    const ac = audioCtx(), audio = await ac.decodeAudioData(arrayBuffer.slice(0));
-    const src = ac.createBufferSource(); src.buffer = audio;
-    const an = ac.createAnalyser(); an.fftSize = 512; src.connect(an); an.connect(ac.destination);
-    const buf = new Float32Array(an.fftSize);
+    const ac = audioCtx();
+    if (ac.state !== 'running') { try { await Promise.race([ac.resume(), new Promise(r => setTimeout(r, 300))]); } catch (e) {} }
+    if (ac.state === 'running') {
+      try {
+        const audio = await ac.decodeAudioData(arrayBuffer.slice(0));
+        const src = ac.createBufferSource(); src.buffer = audio;
+        const an = ac.createAnalyser(); an.fftSize = 512; src.connect(an); an.connect(ac.destination);
+        const buf = new Float32Array(an.fftSize);
+        return await new Promise((resolve) => {
+          let raf = 0, ended = false, guard = 0;
+          const end = () => { if (ended) return; ended = true; cancelAnimationFrame(raf); clearTimeout(guard); onLevel(0); playing = null; resolve(true); };
+          const tick = () => { an.getFloatTimeDomainData(buf); let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]; onLevel(Math.min(1, Math.sqrt(sum / buf.length) * 5.5)); raf = requestAnimationFrame(tick); };
+          src.onended = end; playing = { stop: () => { try { src.stop(); } catch (e) {} end(); } };
+          guard = setTimeout(end, audio.duration * 1000 + 1500);
+          src.start(); tick();
+        });
+      } catch (e) { /* fall through to the element */ }
+    }
+    const url = URL.createObjectURL(new Blob([arrayBuffer], { type: 'audio/mpeg' })), el = new Audio(url);
     return new Promise((resolve) => {
-      let raf = 0, ended = false;
-      const end = () => { if (ended) return; ended = true; cancelAnimationFrame(raf); onLevel(0); playing = null; resolve(); };
-      const tick = () => { an.getFloatTimeDomainData(buf); let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]; onLevel(Math.min(1, Math.sqrt(sum / buf.length) * 5.5)); raf = requestAnimationFrame(tick); };
-      src.onended = end; playing = { stop: () => { try { src.stop(); } catch (e) {} end(); } };
-      src.start(); tick();
+      let raf = 0, ended = false, guard = 0;
+      const end = (ok) => { if (ended) return; ended = true; cancelAnimationFrame(raf); clearTimeout(guard); onLevel(0); playing = null; try { el.pause(); } catch (e) {} URL.revokeObjectURL(url); resolve(ok); };
+      const tick = () => { const t = el.currentTime; onLevel(el.paused ? 0 : 0.35 + 0.3 * Math.abs(Math.sin(t * 13)) * Math.abs(Math.sin(t * 5.3))); raf = requestAnimationFrame(tick); };
+      el.onended = () => end(true); el.onerror = () => end(false);
+      el.onloadedmetadata = () => { clearTimeout(guard); guard = setTimeout(() => end(true), (el.duration || 20) * 1000 + 1500); };
+      guard = setTimeout(() => end(false), 25000);
+      playing = { stop: () => end(true) };
+      el.play().then(tick).catch(() => end(false));     // rejected = browser blocked autoplay (no tap yet)
     });
   }
   function stopSpeaking() { if (playing) playing.stop(); }
   function stopListening() { if (cancelListen) cancelListen(); }
   function release() { stopListening(); stopSpeaking(); if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
 
-  return { supported, listenOnce, speak, stopSpeaking, stopListening, release, unlock: audioCtx };
+  return { supported, listenOnce, speak, stopSpeaking, stopListening, release, unlock };
 }

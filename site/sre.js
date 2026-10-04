@@ -41,14 +41,17 @@ export function initSRE({ T, stage, avatar, screens }) {
   .sre-foot .sre-mic{background:rgba(255,255,255,.08);color:#e9ecf3;border:1px solid rgba(255,255,255,.16);padding:0 12px;font-size:17px;transition:box-shadow .08s}
   .sre-foot .sre-mic.on{background:#d6455d;border-color:#d6455d;color:#fff}
   .sre-foot .sre-mic.speak{background:#2a5bd7;border-color:#2a5bd7;color:#fff}
-  .sre-sub{font:500 11px/1.2 system-ui,sans-serif;color:#8d97aa;margin-top:2px}`;
+  .sre-sub{font:500 11px/1.2 system-ui,sans-serif;color:#8d97aa;margin-top:2px}
+  .sre-spk{cursor:pointer;background:none;border:1px solid rgba(255,255,255,.16);color:#e9ecf3;border-radius:999px;padding:3px 9px;font:600 12px/1 system-ui,sans-serif}
+  .sre-spk.off{color:#8d97aa}`;
   document.head.appendChild(css);
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const launch = el('button', 'sre-launch'); launch.type = 'button'; launch.innerHTML = '💬 Talk to Sid · <b>SRE desk</b>';
   const panel = el('section', 'sre-panel'); panel.setAttribute('aria-label', 'SRE desk chat');
   const head = el('div', 'sre-head'); const title = el('h2', null, 'Sid · SRE desk'); const sub = el('div', 'sre-sub', 'AI version of Sid — type or tap the mic and talk'); title.appendChild(sub); const badge = el('span', 'sre-badge', 'simulated'); const x = el('button', 'sre-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Close');
-  head.append(title, badge, x);
+  const spk = el('button', 'sre-spk'); spk.type = 'button';
+  head.append(title, spk, badge, x);
   const tickets = el('div', 'sre-tickets'), msgs = el('div', 'sre-msgs'), foot = el('div', 'sre-foot');
   panel.append(head, tickets, msgs, foot); document.body.append(launch, panel);
   /* paper toss: every click makes Sid crumple a sheet and shoot for the waste basket */
@@ -90,23 +93,32 @@ export function initSRE({ T, stage, avatar, screens }) {
   }
 
   /* ---------- voice: mic → /api/stt → chat → /api/tts → speakers, mouth follows the audio ---------- */
-  let vState = 'idle', voiceLoop = false, micBtn = null;
+  let vState = 'idle', voiceLoop = false, micBtn = null, speakOn = LS.get('sre.speak', true), speakChain = Promise.resolve();
+  const paintSpk = () => { spk.textContent = speakOn ? '🔊 Voice on' : '🔇 Voice off'; spk.className = 'sre-spk' + (speakOn ? '' : ' off'); spk.title = speakOn ? 'Sid reads his replies out loud' : 'Replies are text only'; };
+  spk.onclick = () => { speakOn = !speakOn; LS.set('sre.speak', speakOn); paintSpk(); if (speakOn) voice.unlock(); else voice.stopSpeaking(); };
   const voice = createVoice({ onLevel: (v) => av('mouth', v), onMic: (v) => { if (micBtn && vState === 'listening') micBtn.style.boxShadow = `0 0 0 ${Math.round(v * 10)}px rgba(214,69,93,.25)`; } });
   const setV = (s) => { vState = s; renderFoot(); };
-  async function speakReply(text) {
+  paintSpk();
+  async function speakNow(text) {
+    let ok = false;
     try {
       const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, text }) });
-      if (!r.ok) return;
-      const buf = await r.arrayBuffer(); setV('speaking'); av('speaking', true); av('converse', true);
-      await voice.speak(buf);
+      if (!r.ok) { addMsg('system', 'Voice is unavailable right now (' + r.status + ').'); return false; }
+      const buf = await r.arrayBuffer(); const prev = vState; setV('speaking'); av('speaking', true); av('converse', true);
+      ok = await voice.speak(buf);
+      if (vState === 'speaking') setV(voiceLoop ? 'thinking' : (prev === 'speaking' ? 'idle' : prev));
+      if (!ok) addMsg('system', 'Your browser blocked the audio — tap anywhere in this panel, then "🔊 Voice on".');
     } catch (e) {} finally { av('speaking', false); }
+    return ok;
   }
+  /* one reply at a time, in order */
+  function speakReply(text) { speakChain = speakChain.then(() => speakNow(text)); return speakChain; }
   async function voiceConversation() {
     while (voiceLoop && open) {
       setV('listening'); let rec = null;
       try { rec = await voice.listenOnce(); } catch (e) { addMsg('system', 'I could not use the microphone — check the browser permission.'); voiceLoop = false; break; }
       if (!voiceLoop) break;
-      if (!rec) { voiceLoop = false; break; }                                  // nobody spoke for a while: stop listening
+      if (!rec) { voiceLoop = false; addMsg('system', 'I did not hear anything, so I stopped listening. Tap 🎙 to talk again.'); break; }
       setV('thinking');
       let text = '';
       try { const r = await fetch('/api/stt', { method: 'POST', headers: { 'content-type': 'application/octet-stream', 'x-invite': invite, 'x-audio-type': rec.type }, body: rec.blob }); const d = await r.json().catch(() => ({})); if (r.status === 401) { invite = ''; LS.set('sre.invite', ''); voiceLoop = false; addMsg('system', 'Enter your invite code first.'); break; } text = (d.text || '').trim(); } catch (e) {}
@@ -118,8 +130,11 @@ export function initSRE({ T, stage, avatar, screens }) {
   function toggleVoice() {
     if (!invite) { addMsg('system', 'Enter your invite code first.'); return; }
     if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); setV('idle'); return; }
-    voice.unlock(); voiceLoop = true; voiceConversation();
+    voice.unlock(); if (!speakOn) { speakOn = true; LS.set('sre.speak', true); paintSpk(); } voiceLoop = true; voiceConversation();
   }
+
+  /* any tap inside the panel counts as permission to play sound */
+  panel.addEventListener('pointerdown', () => voice.unlock(), { capture: true });
 
   function greet() { addMsg('system', 'You walked into Sid\'s SRE shop. Ask for what you need — he will ask the questions an SRE would.'); }
 
@@ -127,7 +142,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   const short = (s) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > 110 ? s.slice(0, 107) + '…' : s; };
   async function send(text, opts = {}) {
     messages.push({ role: 'user', content: text }); addMsg('user', text);
-    busy = true; renderFoot(); const dots = addMsg('system', 'Sid is thinking…');
+    voice.unlock(); busy = true; renderFoot(); const dots = addMsg('system', 'Sid is thinking…');
     av('converse', true); av('play', 'think', 6);
     try {
       const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token), voice: !!opts.voice }) });
@@ -139,7 +154,7 @@ export function initSRE({ T, stage, avatar, screens }) {
         badge.textContent = data.mode || 'simulated';
         messages.push({ role: 'assistant', content: data.reply }); addMsg('assistant', data.reply);
         av('say', short(data.reply)); av('play', (data.actions && data.actions[0]) || 'talk', data.actions && data.actions[0] ? undefined : Math.min(6, 2 + data.reply.length * 0.04));
-        if (opts.voice && voiceLoop) { busy = false; await speakReply(data.reply); }
+        if (speakOn || (opts.voice && voiceLoop)) { busy = false; renderFoot(); await speakReply(data.reply); }
         if (data.job) startJob(data.job);
         else if (jobs.some(j => status[j.id] && !status[j.id].done)) setTimeout(() => av('type'), 7000);   // he answers, then goes back to the job
       }
@@ -255,7 +270,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   }
 
   /* ---------- headlines for everyone; live portfolio + briefing only when the owner code is in this browser ---------- */
-  let headlines = [], owner = null, briefed = false;
+  let headlines = [], owner = null, briefed = false, spokeBrief = false;
   async function loadNews() { try { const r = await fetch('/api/news'); if (r.ok) { headlines = (await r.json()).items || []; drawBoard(); } } catch (e) {} }
   async function loadOwner(withText) {
     if (!invite) return;
@@ -277,7 +292,8 @@ export function initSRE({ T, stage, avatar, screens }) {
   /* ---------- open / close ---------- */
   function setOpen(v) {
     open = v; panel.classList.toggle('open', v); launch.style.display = v ? 'none' : ''; tossBtn.style.display = v ? 'none' : '';
-    if (v) { if (!messages.length && invite) greet(); av('converse', true); av('sit', () => av('play', 'wave')); renderFoot(); }
+    if (v) { voice.unlock(); if (speakOn && owner && owner.brief && !spokeBrief) { spokeBrief = true; speakReply(owner.brief); }
+      if (!messages.length && invite) greet(); av('converse', true); av('sit', () => av('play', 'wave')); renderFoot(); }
     else { av('converse', false); if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); } }
   }
   launch.onclick = () => setOpen(true); x.onclick = () => setOpen(false);
