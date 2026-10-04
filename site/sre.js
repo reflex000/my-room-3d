@@ -73,13 +73,13 @@ export function initSRE({ T, stage, avatar, screens }) {
         const v = i.value.trim(); if (!v || b.disabled) return; b.disabled = true; b.textContent = '…';
         let ok = false; try { const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite: v, messages: [] }) }); ok = r.status !== 401; } catch (e) {}
         if (!ok) { b.disabled = false; b.textContent = 'Enter'; addMsg('system', 'That code did not match — check for typos (it looks like guest-xxxxxxxx).'); return; }
-        invite = v; LS.set('sre.invite', invite); addMsg('system', 'Code accepted ✓'); renderFoot(); if (!messages.length) greet(); loadOwner(true);
+        invite = v; LS.set('sre.invite', invite); addMsg('system', 'Code accepted ✓'); renderFoot(); if (!messages.length) greet();
         if (pending) { const t = pending; pending = null; send(t); }
       };
       b.onclick = go; i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
       foot.append(i, b); return;
     }
-    const t = el('textarea'); t.rows = 2; t.placeholder = 'e.g. "I need a server to try out my app"'; t.maxLength = 1500; t.setAttribute('aria-label', 'Message');
+    const t = el('textarea'); t.rows = 2; t.placeholder = awaitingPass ? 'Say or type your passphrase' : 'e.g. "I need a server to try out my app"'; t.maxLength = 1500; t.setAttribute('aria-label', 'Message');
     const b = el('button', null, 'Send'); b.type = 'button'; b.disabled = busy;
     const go = () => { const v = t.value.trim(); if (!v || busy) return; t.value = ''; send(v); };
     b.onclick = go; t.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
@@ -147,11 +147,13 @@ export function initSRE({ T, stage, avatar, screens }) {
   /* ---------- chat ---------- */
   const short = (s) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > 110 ? s.slice(0, 107) + '…' : s; };
   async function send(text, opts = {}) {
+    if (awaitingPass) { addMsg('user', '••••••'); return tryUnlock(text); }   // the passphrase never goes into the chat history
+    if (/^\s*(lock|hide|lock it|hide (it|my (numbers|portfolio))|private (mode )?off)\s*[.!]?\s*$/i.test(text)) { addMsg('user', text); if (unlocked()) { lockPrivate(false); if (speakOn) speakReply('Locked.'); } else addMsg('system', 'Already locked.'); return; }
     messages.push({ role: 'user', content: text }); addMsg('user', text);
     voice.unlock(); busy = true; renderFoot(); const dots = addMsg('system', 'Sid is thinking…');
     av('converse', true); av('play', 'think', 6);
     try {
-      const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token), voice: !!opts.voice }) });
+      const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token), voice: !!opts.voice, session: unlocked() ? privateSession : undefined }) });
       const data = await r.json().catch(() => ({}));
       dots.remove();
       if (r.status === 401) { invite = ''; LS.set('sre.invite', ''); messages.pop(); pending = text; addMsg('system', 'That invite code did not work — enter it again below and I will resend your message.'); }
@@ -159,6 +161,7 @@ export function initSRE({ T, stage, avatar, screens }) {
       else {
         badge.textContent = data.mode || 'simulated';
         messages.push({ role: 'assistant', content: data.reply }); addMsg('assistant', data.reply);
+        if (data.actions && data.actions.includes('ask_passphrase')) { awaitingPass = true; renderFoot(); }
         av('say', short(data.reply)); av('play', (data.actions && data.actions[0]) || 'talk', data.actions && data.actions[0] ? undefined : Math.min(6, 2 + data.reply.length * 0.04));
         if (speakOn || (opts.voice && voiceLoop)) { busy = false; renderFoot(); await speakReply(data.reply); }
         if (data.job) startJob(data.job);
@@ -249,7 +252,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   const SLIDE = 8000, FADE = 600;
   let slideStart = performance.now(), slideIdx = 0, lastList = [];
   function boardItems() {
-    const mine = owner && owner.headlines ? owner.headlines : [], seen = new Set(mine.map(n => n.title));
+    const mine = unlocked() && owner && owner.headlines ? owner.headlines : [], seen = new Set(mine.map(n => n.title));
     return [...mine.slice(0, 4), ...headlines.filter(n => !seen.has(n.title))].slice(0, 8);
   }
   function drawBoard() {
@@ -263,7 +266,7 @@ export function initSRE({ T, stage, avatar, screens }) {
     bx.fillStyle = '#e9f2f6'; bx.font = '800 44px system-ui,sans-serif'; bx.fillText("SID'S BOARD", 48, 56);
     const clock = new Date().toLocaleTimeString('en-CA', { timeZone: 'America/Vancouver', hour: 'numeric', minute: '2-digit' });
     bx.fillStyle = '#7e96a4'; bx.font = '600 24px system-ui,sans-serif'; bx.fillText('VANCOUVER · ' + clock.toUpperCase(), 330, 58);
-    if (owner && owner.summary) {
+    if (unlocked() && owner && owner.summary) {
       const cr = owner.summary.crypto || {}, up = (cr.change24Pct || 0) >= 0, k = (v) => '$' + (v / 1000).toFixed(1) + 'k';
       bx.textAlign = 'right'; bx.font = '800 34px system-ui,sans-serif'; bx.fillStyle = up ? '#7ee0b3' : '#ff8a8a';
       bx.fillText(`Crypto ${k(cr.account || 0)} ${up ? '▲' : '▼'}${Math.abs(cr.change24Pct || 0).toFixed(1)}%`, W - 48, 46);
@@ -306,29 +309,45 @@ export function initSRE({ T, stage, avatar, screens }) {
   setInterval(() => { if (!document.hidden) drawBoard(); }, 50);
 
   /* ---------- headlines for everyone; live portfolio + briefing only when the owner code is in this browser ---------- */
-  let headlines = [], owner = null, briefed = false, spokeBrief = false;
+  let headlines = [], owner = null, privateSession = null, privateUntil = 0, awaitingPass = false, lockTimer = 0;
+  const unlocked = () => !!privateSession && Date.now() < privateUntil;
   async function loadNews() { try { const r = await fetch('/api/news'); if (r.ok) { headlines = (await r.json()).items || []; drawBoard(); } } catch (e) {} }
+  /* personal numbers: only while private mode is unlocked (session lives in memory, never in localStorage) */
   async function loadOwner(withText) {
-    if (!invite) return;
+    if (!invite || !unlocked()) return null;
     try {
-      const r = await fetch('/api/brief', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, text: !!withText }) });
-      if (!r.ok) { if (r.status === 403) owner = null; return; }
-      const d = await r.json(); owner = { ...(owner || {}), ...d, brief: d.brief || (owner && owner.brief) }; drawBoard();
-      if (withText && d.brief && !briefed) {
-        briefed = true; sub.textContent = 'Owner mode — your portfolio and news are loaded';
-        messages.push({ role: 'assistant', content: d.brief }); addMsg('assistant', d.brief);
-        const s0 = d.summary, lead = d.pokes && d.pokes.length ? 'Heads up — ' + d.pokes[0] : `Crypto $${Math.round((s0.crypto || {}).account || 0).toLocaleString('en-CA')}, ${(s0.change24Pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(s0.change24Pct || 0).toFixed(1)}% today. Click me for the briefing.`;
-        const tell = () => { if (avatar.ready) av('say', lead.length > 150 ? lead.slice(0, 147) + '…' : lead, 9); else setTimeout(tell, 1500); }; setTimeout(tell, 4500);
-      }
-    } catch (e) {}
+      const r = await fetch('/api/brief', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, session: privateSession, text: !!withText }) });
+      if (!r.ok) { if (r.status === 403) lockPrivate(true); return null; }
+      const d = await r.json(); owner = d; drawBoard(); return d;
+    } catch (e) { return null; }
+  }
+  function lockPrivate(silent) {
+    privateSession = null; privateUntil = 0; owner = null; clearTimeout(lockTimer); drawBoard();
+    sub.textContent = 'AI version of Sid — type or tap the mic and talk';
+    if (!silent) { addMsg('system', 'Private mode is off — your numbers are hidden again.'); }
+  }
+  async function tryUnlock(phrase) {
+    awaitingPass = false; renderFoot();
+    const r = await fetch('/api/unlock', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, passphrase: phrase }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) {
+      const why = d.error === 'not_configured' ? 'No passphrase is set up yet (Vercel env PRIVATE_PASSPHRASE).' : d.error === 'wrong_passphrase' ? 'That passphrase did not match.' : (d.error || 'Could not unlock right now.');
+      addMsg('system', why); if (speakOn) speakReply(d.error === 'wrong_passphrase' ? "That's not it." : why); return;
+    }
+    privateSession = d.session; privateUntil = d.expiresAt;
+    clearTimeout(lockTimer); lockTimer = setTimeout(() => lockPrivate(false), d.expiresAt - Date.now());
+    sub.textContent = 'Private mode — on for 15 minutes · say "lock" to hide';
+    addMsg('system', 'Unlocked ✓ Your portfolio is on the board for 15 minutes.');
+    const o = await loadOwner(true);
+    if (o && o.brief) { messages.push({ role: 'assistant', content: o.brief }); addMsg('assistant', o.brief); if (speakOn) speakReply(o.brief.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ')); }
   }
   loadNews(); setInterval(loadNews, 10 * 60e3);
-  loadOwner(true); setInterval(() => loadOwner(false), 5 * 60e3);
+  setInterval(() => { if (unlocked()) loadOwner(false); }, 5 * 60e3);
 
   /* ---------- open / close ---------- */
   function setOpen(v) {
     open = v; panel.classList.toggle('open', v); launch.style.display = v ? 'none' : ''; tossBtn.style.display = v ? 'none' : '';
-    if (v) { voice.unlock(); if (speakOn && owner && owner.brief && !spokeBrief) { spokeBrief = true; speakReply(owner.brief.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ')); }
+    if (v) { voice.unlock();
       if (!messages.length && invite) greet(); av('converse', true); av('sit', () => av('play', 'wave')); renderFoot(); }
     else { av('converse', false); if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); } }
   }

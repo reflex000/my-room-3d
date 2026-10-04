@@ -1,6 +1,6 @@
 /* POST /api/brief { invite, text?: false } — owner only. Live portfolio snapshot, chart read, relevant headlines,
    pokes, and (unless text:false) a short spoken-style briefing. Guests get 403; the portfolio never leaves for them. */
-const { roleFor, rateLimited } = require('./_lib.js');
+const { roleFor, rateLimited, sessionOk } = require('./_lib.js');
 const { loadBrain } = require('./_brain.js');
 const { ownerContext, OWNER_RULES } = require('./_owner.js');
 
@@ -13,6 +13,7 @@ module.exports = async (req, res) => {
   const role = roleFor(body.invite);
   if (!role) { res.status(401).json({ error: 'invite_required' }); return; }
   if (role !== 'owner') { res.status(403).json({ error: 'owner_only' }); return; }
+  if (!sessionOk(body.session)) { res.status(403).json({ error: 'locked' }); return; }
   try {
     const brain = await loadBrain('owner');
     const ctx = await ownerContext(brain);

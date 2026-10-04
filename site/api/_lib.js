@@ -149,4 +149,8 @@ function jobStatus(job, now = Date.now()) {
   };
 }
 
-module.exports = { MODE, inviteOk, roleFor, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus };
+/* private mode: short-lived signed token handed out by /api/unlock after the owner says his passphrase */
+function signSession(obj) { return signJob({ ...obj, kind: 'session' }); }
+function sessionOk(token) { const t = verifyJob(token); return !!(t && t.kind === 'session' && t.scope === 'private' && t.exp > Date.now()); }
+
+module.exports = { MODE, inviteOk, roleFor, signSession, sessionOk, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus };

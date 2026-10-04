@@ -3,7 +3,7 @@
    → { reply, actions:[…], job?:{ token, status }, mode }
    The model can only (a) talk, (b) animate the avatar, (c) submit a request that validates against a skill schema.
    It never sees credentials and never produces commands; execution is a separate pipeline (simulated in Step 1). */
-const { MODE, roleFor, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus } = require('./_lib.js');
+const { MODE, roleFor, sessionOk, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus } = require('./_lib.js');
 const { loadBrain, hasBrain } = require('./_brain.js');
 const { ownerContext, OWNER_RULES } = require('./_owner.js');
 
@@ -19,12 +19,16 @@ const TOOLS = [
       params: { type: 'object', description: 'Parameters exactly as described in the skill file.', additionalProperties: true },
     } } } },
   { type: 'function', function: {
+    name: 'request_unlock',
+    description: 'Owner only, private mode locked: ask the client to collect his passphrase (he says it out loud or types it). Call this when he asks about his own portfolio, holdings, money, goals or other personal details, or says "show me on the board". Do not ask him to type the passphrase into the chat yourself and never repeat it.',
+    parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: {
     name: 'avatar_action',
     description: 'Make the 3D avatar perform a short gesture while you speak.',
     parameters: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ACTIONS } } } } },
 ];
 
-async function systemPrompt(jobTokens, voice, role) {
+async function systemPrompt(jobTokens, voice, role, unlocked) {
   const { persona, skills } = readSkills();                      // desk rules + executable playbooks that ship with the site (public-safe)
   const jobs = (jobTokens || []).map(verifyJob).filter(Boolean).slice(-5).map(j => { const s = jobStatus(j); return `- ${s.id} (${s.skill}): ${s.stageLabel}${s.done ? ' — outputs: ' + JSON.stringify(s.outputs) : ''}`; });
   /* private brain: who Sid is + the skills this caller is allowed to hear; owner also gets his live portfolio */
@@ -33,7 +37,11 @@ async function systemPrompt(jobTokens, voice, role) {
     try {
       const brain = await loadBrain(role);
       brainText = [brain.persona && '# Who you are (Sid)\n' + brain.persona, ...brain.skills.map(k => `# Skill: ${k.name}\n${k.text}`)].filter(Boolean).join('\n\n');
-      if (role === 'owner') { const ctx = await ownerContext(brain); if (ctx) ownerText = OWNER_RULES + '\n\n# Live data\n' + ctx.text; }
+      if (role === 'owner' && unlocked) { const ctx = await ownerContext(brain); if (ctx) ownerText = OWNER_RULES + '\n\n# Live data (private mode is ON — he unlocked it with his passphrase)\n' + ctx.text; }
+      else if (role === 'owner') ownerText = `# Talking to Sid himself — private mode is LOCKED
+You are talking to the real Sid (owner code), but his personal data is locked. You do not have his portfolio numbers right now and must not guess them.
+If he asks about his own holdings, portfolio value, gains, money, goals, family or anything personal, or says "show me on the board": call the request_unlock tool and tell him in one short sentence to say his passphrase. Never ask for it in any other way and never repeat it.
+General knowledge (how markets, crypto, stocks, trading strategies work), news and chat are fine without unlocking.`;
     } catch (e) { brainText = ''; }
   }
   return [
@@ -77,7 +85,7 @@ module.exports = async (req, res) => {
     .map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
   if (!history.length || history[history.length - 1].role !== 'user') { res.status(400).json({ error: 'last message must be from the user' }); return; }
 
-  const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role) }, ...history];
+  const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role, role === 'owner' && sessionOk(body.session)) }, ...history];
   const actions = []; let job = null, reply = '';
   try {
     for (let round = 0; round < 4; round++) {
@@ -87,7 +95,10 @@ module.exports = async (req, res) => {
       for (const tc of msg.tool_calls) {
         let args = {}; try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
         let result;
-        if (tc.function.name === 'avatar_action') {
+        if (tc.function.name === 'request_unlock') {
+          if (role === 'owner') actions.push('ask_passphrase');
+          result = role === 'owner' ? { ok: true, note: 'the client is now listening for his passphrase' } : { ok: false, errors: ['not available'] };
+        } else if (tc.function.name === 'avatar_action') {
           if (ACTIONS.includes(args.action)) actions.push(args.action);
           result = { ok: true };
         } else if (tc.function.name === 'submit_request') {
