@@ -8,6 +8,6 @@ module.exports = async (req, res) => {
   try {
     const items = await news();
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-    res.status(200).json({ items: items.slice(0, 8).map(n => ({ source: n.source, title: n.title, link: n.link, time: n.time })) });
+    res.status(200).json({ items: items.slice(0, 10).map(n => ({ source: n.source, title: n.title, link: n.link, time: n.time, summary: n.summary })) });
   } catch (e) { res.status(502).json({ error: 'news unavailable' }); }
 };

@@ -95,7 +95,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   /* ---------- voice: mic → /api/stt → chat → /api/tts → speakers, mouth follows the audio ---------- */
   let vState = 'idle', voiceLoop = false, micBtn = null, speakOn = LS.get('sre.speak', true), speakChain = Promise.resolve();
   const paintSpk = () => { spk.textContent = speakOn ? '🔊 Voice on' : '🔇 Voice off'; spk.className = 'sre-spk' + (speakOn ? '' : ' off'); spk.title = speakOn ? 'Sid reads his replies out loud' : 'Replies are text only'; };
-  spk.onclick = () => { speakOn = !speakOn; LS.set('sre.speak', speakOn); paintSpk(); if (speakOn) voice.unlock(); else voice.stopSpeaking(); };
+  spk.onclick = () => { speakOn = !speakOn; LS.set('sre.speak', speakOn); paintSpk(); if (speakOn) { voice.unlock(); speakReply('Voice is on. You will hear me now.'); } else voice.stopSpeaking(); };
   const voice = createVoice({ onLevel: (v) => av('mouth', v), onMic: (v) => { if (micBtn && vState === 'listening') micBtn.style.boxShadow = `0 0 0 ${Math.round(v * 10)}px rgba(214,69,93,.25)`; } });
   const setV = (s) => { vState = s; renderFoot(); };
   paintSpk();
@@ -107,7 +107,11 @@ export function initSRE({ T, stage, avatar, screens }) {
       const buf = await r.arrayBuffer(); const prev = vState; setV('speaking'); av('speaking', true); av('converse', true);
       ok = await voice.speak(buf);
       if (vState === 'speaking') setV(voiceLoop ? 'thinking' : (prev === 'speaking' ? 'idle' : prev));
-      if (!ok) addMsg('system', 'Your browser blocked the audio — tap anywhere in this panel, then "🔊 Voice on".');
+      if (!ok) {
+        const m = addMsg('system', 'Your browser did not let the audio play. ');
+        const btn = el('button', 'sre-spk', '▶ Play it'); btn.type = 'button'; btn.style.marginLeft = '6px';
+        btn.onclick = () => { voice.unlock(); voice.speak(buf); m.remove(); }; m.appendChild(btn);
+      }
     } catch (e) {} finally { av('speaking', false); }
     return ok;
   }
@@ -222,52 +226,82 @@ export function initSRE({ T, stage, avatar, screens }) {
     ctx.fillStyle = '#18242f'; ctx.fillRect(40, h - 60, w - 80, 16); ctx.fillStyle = '#3fb98f'; ctx.fillRect(40, h - 60, (w - 80) * s.progress, 16);
   }
 
-  /* ---------- ops board on the back wall (child of the avatar group so it survives the baked-GLB swap) ---------- */
-  const bc = document.createElement('canvas'); bc.width = 1024; bc.height = 640; const bx = bc.getContext('2d');
+  /* ---------- Sid's board: a wall-mounted screen on the back wall, right of the desk (child of the avatar group so it
+     survives the baked-GLB swap). Back wall face z = -1.76; right wall / pillar face x = 2.46. ---------- */
+  const BW_ = 1.16, BH_ = 0.6525, BOARD = { x: 1.83, y: 1.80, z: -1.743 };
+  const bc = document.createElement('canvas'); bc.width = 1280; bc.height = 720; const bx = bc.getContext('2d');
   const btex = new T.CanvasTexture(bc); btex.colorSpace = T.SRGBColorSpace; btex.anisotropy = 8;
-  const board = new T.Mesh(new T.PlaneGeometry(1.0, 0.625), new T.MeshBasicMaterial({ map: btex, toneMapped: false })); board.name = 'tickets_board';
-  const frame = new T.Mesh(new T.BoxGeometry(1.06, 0.685, 0.03), new T.MeshStandardMaterial({ color: 0x0c0e12, roughness: 0.6 })); frame.name = 'tickets_board_frame'; frame.position.z = -0.018; board.add(frame);
-  board.position.set(2.05, 1.66, -1.74); avatar.group.add(board);
+  const board = new T.Mesh(new T.PlaneGeometry(BW_, BH_), new T.MeshBasicMaterial({ map: btex, toneMapped: false })); board.name = 'tickets_board';
+  const bezelMat = new T.MeshStandardMaterial({ color: 0x08090c, roughness: 0.35, metalness: 0.3 });
+  const bezel = new T.Mesh(new T.BoxGeometry(BW_ + 0.036, BH_ + 0.036, 0.022), bezelMat); bezel.name = 'tickets_board_bezel'; bezel.position.z = -0.0115; board.add(bezel);
+  /* soft light spill on the wall around the screen */
+  const gc = document.createElement('canvas'); gc.width = gc.height = 256; const gx = gc.getContext('2d'), gg = gx.createRadialGradient(128, 128, 30, 128, 128, 128);
+  gg.addColorStop(0, 'rgba(90,150,255,0.55)'); gg.addColorStop(0.6, 'rgba(60,110,230,0.18)'); gg.addColorStop(1, 'rgba(40,80,200,0)'); gx.fillStyle = gg; gx.fillRect(0, 0, 256, 256);
+  const glow = new T.Mesh(new T.PlaneGeometry(BW_ * 1.9, BH_ * 2.1), new T.MeshBasicMaterial({ map: new T.CanvasTexture(gc), transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.55 }));
+  glow.name = 'tickets_board_glow'; glow.position.z = -0.0225; glow.raycast = () => {}; board.add(glow);
+  board.position.set(BOARD.x, BOARD.y, BOARD.z); avatar.group.add(board);
+
   const fit = (ctx, text, max) => { if (ctx.measureText(text).width <= max) return text; let t = text; while (t.length > 4 && ctx.measureText(t + '…').width > max) t = t.slice(0, -1); return t.trimEnd() + '…'; };
+  const wrap = (ctx, text, max, lines) => { const words = String(text || '').split(/\s+/), out = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > max && cur) { out.push(cur); cur = w; if (out.length === lines) break; } else cur = t; } if (out.length < lines && cur) out.push(cur); if (out.length === lines && words.join(' ').length > out.join(' ').length) out[lines - 1] = fit(ctx, out[lines - 1] + '…', max); return out; };
   const ago = (t) => { if (!t) return ''; const h = (Date.now() - t) / 3600e3; return h < 1 ? Math.max(1, Math.round(h * 60)) + 'm' : h < 24 ? Math.round(h) + 'h' : Math.round(h / 24) + 'd'; };
-  function drawBoard() {
-    bx.fillStyle = '#0b1219'; bx.fillRect(0, 0, 1024, 640); bx.textBaseline = 'middle'; bx.textAlign = 'left';
-    bx.fillStyle = '#10202c'; bx.fillRect(0, 0, 1024, 84);
-    bx.fillStyle = '#e9f2f6'; bx.font = '700 40px system-ui,sans-serif'; bx.fillText("SID'S BOARD", 36, 44);
-    if (owner && owner.summary) {                                   // only in Sid's own browser
-      const cr = owner.summary.crypto || {}, up = (cr.change24Pct || 0) >= 0, k = (v) => '$' + (v / 1000).toFixed(1) + 'k';
-      bx.textAlign = 'right'; bx.font = '700 27px system-ui,sans-serif'; bx.fillStyle = up ? '#7ee0b3' : '#ff8a8a';
-      bx.fillText(`Crypto ${k(cr.account || 0)} ${up ? '▲' : '▼'}${Math.abs(cr.change24Pct || 0).toFixed(1)}%`, 992, 32);
-      bx.font = '500 19px system-ui,sans-serif'; bx.fillStyle = '#9fb3c1';
-      bx.fillText(`Stocks ${k((owner.summary.stocks || {}).value || 0)} · all-time ${(cr.allTimeReturn || 0) >= 0 ? '+' : '−'}$${Math.round(Math.abs(cr.allTimeReturn || 0)).toLocaleString('en-CA')}`, 992, 62); bx.textAlign = 'left';
-    }
-    /* top news */
+  const SLIDE = 8000, FADE = 600;
+  let slideStart = performance.now(), slideIdx = 0, lastList = [];
+  function boardItems() {
     const mine = owner && owner.headlines ? owner.headlines : [], seen = new Set(mine.map(n => n.title));
-    const list = [...mine.slice(0, 3), ...headlines.filter(n => !seen.has(n.title))].slice(0, 4);
-    bx.fillStyle = '#7e96a4'; bx.font = '700 20px system-ui,sans-serif'; bx.fillText('TOP NEWS', 36, 112);
-    if (!list.length) { bx.fillStyle = '#7e96a4'; bx.font = '400 26px system-ui,sans-serif'; bx.fillText('Loading headlines…', 36, 170); }
-    list.forEach((n, i) => {
-      const y = 136 + i * 84, hot = n.hot && n.hot.length;
-      bx.fillStyle = hot ? '#3a1820' : '#132836'; bx.beginPath(); bx.roundRect(28, y, 968, 74, 12); bx.fill();
-      bx.fillStyle = '#e9f2f6'; bx.font = '600 25px system-ui,sans-serif'; bx.fillText(fit(bx, n.title, 930), 46, y + 26);
-      bx.font = '500 18px system-ui,sans-serif'; bx.fillStyle = hot ? '#ff8a8a' : '#7e96a4';
-      bx.fillText(`${n.source} · ${ago(n.time)} ago${n.tags && n.tags.length ? '  ·  ' + n.tags.slice(0, 4).join(' ') : ''}`, 46, y + 54);
-    });
+    return [...mine.slice(0, 4), ...headlines.filter(n => !seen.has(n.title))].slice(0, 8);
+  }
+  function drawBoard() {
+    const W = 1280, H = 720, now = performance.now(), list = boardItems();
+    if (list.length !== lastList.length || (list[0] && lastList[0] && list[0].title !== lastList[0].title)) { lastList = list; if (slideIdx >= list.length) slideIdx = 0; }
+    if (now - slideStart > SLIDE && list.length > 1) { slideStart = now; slideIdx = (slideIdx + 1) % list.length; }
+    const t = now - slideStart, alpha = Math.min(1, t / FADE, Math.max(0, (SLIDE - t) / FADE)) ;
+    const g0 = bx.createLinearGradient(0, 0, 0, H); g0.addColorStop(0, '#0d1824'); g0.addColorStop(1, '#070b11');
+    bx.fillStyle = g0; bx.fillRect(0, 0, W, H); bx.textBaseline = 'middle'; bx.textAlign = 'left';
+    /* header */
+    bx.fillStyle = '#e9f2f6'; bx.font = '800 44px system-ui,sans-serif'; bx.fillText("SID'S BOARD", 48, 56);
+    const clock = new Date().toLocaleTimeString('en-CA', { timeZone: 'America/Vancouver', hour: 'numeric', minute: '2-digit' });
+    bx.fillStyle = '#7e96a4'; bx.font = '600 24px system-ui,sans-serif'; bx.fillText('VANCOUVER · ' + clock.toUpperCase(), 330, 58);
+    if (owner && owner.summary) {
+      const cr = owner.summary.crypto || {}, up = (cr.change24Pct || 0) >= 0, k = (v) => '$' + (v / 1000).toFixed(1) + 'k';
+      bx.textAlign = 'right'; bx.font = '800 34px system-ui,sans-serif'; bx.fillStyle = up ? '#7ee0b3' : '#ff8a8a';
+      bx.fillText(`Crypto ${k(cr.account || 0)} ${up ? '▲' : '▼'}${Math.abs(cr.change24Pct || 0).toFixed(1)}%`, W - 48, 46);
+      bx.font = '600 21px system-ui,sans-serif'; bx.fillStyle = '#9fb3c1';
+      bx.fillText(`Stocks ${k((owner.summary.stocks || {}).value || 0)} · all-time ${(cr.allTimeReturn || 0) >= 0 ? '+' : '−'}$${Math.round(Math.abs(cr.allTimeReturn || 0)).toLocaleString('en-CA')}`, W - 48, 80); bx.textAlign = 'left';
+    }
+    bx.fillStyle = 'rgba(255,255,255,0.08)'; bx.fillRect(48, 106, W - 96, 2);
+    /* featured headline (carousel) */
+    const n = list[slideIdx];
+    if (!n) { bx.fillStyle = '#7e96a4'; bx.font = '500 34px system-ui,sans-serif'; bx.fillText('Loading the news…', 48, 300); }
+    else {
+      bx.save(); bx.globalAlpha = alpha; const dx = (1 - alpha) * (t < FADE ? 40 : -40);
+      const hot = n.hot && n.hot.length;
+      bx.fillStyle = hot ? '#ff6b7a' : '#4aa8e0'; bx.beginPath(); bx.roundRect(48 + dx, 136, 12, 300, 6); bx.fill();
+      bx.font = '700 22px system-ui,sans-serif'; bx.fillStyle = hot ? '#ff9aa5' : '#8fc9ef';
+      bx.fillText(`${(n.source || '').toUpperCase()}  ·  ${ago(n.time)} AGO${n.tags && n.tags.length ? '  ·  ' + n.tags.slice(0, 4).join('  ') : ''}${hot ? '  ·  ' + n.hot[0].toUpperCase() : ''}`, 84 + dx, 156);
+      bx.font = '800 50px system-ui,sans-serif'; bx.fillStyle = '#f2f6f9';
+      wrap(bx, n.title, W - 150, 3).forEach((ln, i) => bx.fillText(ln, 84 + dx, 222 + i * 62));
+      if (n.summary) { bx.font = '400 26px system-ui,sans-serif'; bx.fillStyle = '#a9bac6'; wrap(bx, n.summary, W - 150, 2).forEach((ln, i) => bx.fillText(ln, 84 + dx, 418 + i * 36)); }
+      bx.restore();
+      /* slide timer + dots */
+      bx.fillStyle = 'rgba(255,255,255,0.08)'; bx.fillRect(84, 500, W - 168, 4); bx.fillStyle = '#4aa8e0'; bx.fillRect(84, 500, (W - 168) * Math.min(1, t / SLIDE), 4);
+      list.forEach((_, i) => { bx.fillStyle = i === slideIdx ? '#e9f2f6' : 'rgba(255,255,255,0.25)'; bx.beginPath(); bx.arc(W / 2 - (list.length - 1) * 14 + i * 28, 530, i === slideIdx ? 7 : 5, 0, Math.PI * 2); bx.fill(); });
+    }
+    /* up next */
+    const next = list.length > 1 ? list[(slideIdx + 1) % list.length] : null;
+    bx.fillStyle = 'rgba(255,255,255,0.05)'; bx.beginPath(); bx.roundRect(48, 566, W - 96, 58, 12); bx.fill();
+    bx.font = '700 20px system-ui,sans-serif'; bx.fillStyle = '#7e96a4'; bx.fillText('UP NEXT', 70, 595);
+    if (next) { bx.font = '600 24px system-ui,sans-serif'; bx.fillStyle = '#cfdbe3'; bx.fillText(fit(bx, next.title + '  —  ' + next.source, W - 300), 190, 595); }
     /* tickets */
-    const tk = jobs.map(j => status[j.id]).filter(Boolean).slice(0, 2), ty = 486;
-    bx.fillStyle = '#7e96a4'; bx.font = '700 20px system-ui,sans-serif'; bx.fillText('TICKETS', 36, ty);
-    bx.textAlign = 'right'; bx.fillStyle = '#ffc46b'; bx.fillText(badge.textContent.toUpperCase(), 992, ty); bx.textAlign = 'left';
-    if (!tk.length) { bx.fillStyle = '#7e96a4'; bx.font = '400 22px system-ui,sans-serif'; bx.fillText('No open tickets — talk to Sid to open one.', 36, ty + 44); }
-    tk.forEach((st, i) => {
-      const y = ty + 20 + i * 64; bx.fillStyle = '#132836'; bx.beginPath(); bx.roundRect(28, y, 968, 56, 12); bx.fill();
-      bx.fillStyle = '#9fd0ff'; bx.font = '700 22px ui-monospace,Consolas,monospace'; bx.fillText(st.id, 46, y + 22);
-      bx.fillStyle = '#e9f2f6'; bx.font = '500 20px system-ui,sans-serif'; bx.fillText(`${st.skill} · ${st.params.vm_size || ''} · ${st.params.region || ''}`, 220, y + 22);
-      bx.fillStyle = st.done ? '#7ee0b3' : '#ffc46b'; bx.textAlign = 'right'; bx.fillText(st.done ? 'DONE' : st.stageLabel, 978, y + 22); bx.textAlign = 'left';
-      bx.fillStyle = '#0b1219'; bx.fillRect(46, y + 40, 932, 8); bx.fillStyle = '#3fb98f'; bx.fillRect(46, y + 40, 932 * st.progress, 8);
-    });
+    const open = jobs.map(j => status[j.id]).filter(Boolean), active = open.filter(x => !x.done);
+    bx.font = '700 20px system-ui,sans-serif'; bx.fillStyle = '#7e96a4'; bx.fillText('TICKETS', 48, 668);
+    bx.font = '600 22px system-ui,sans-serif'; bx.fillStyle = active.length ? '#ffc46b' : '#9fb3c1';
+    bx.fillText(active.length ? `${active[0].id} · ${active[0].stageLabel}${active.length > 1 ? `  (+${active.length - 1} more)` : ''}` : (open.length ? `${open.length} done — all clear` : 'No open tickets — talk to Sid to open one'), 170, 668);
+    bx.textAlign = 'right'; bx.fillStyle = '#ffc46b'; bx.font = '700 18px system-ui,sans-serif'; bx.fillText(badge.textContent.toUpperCase(), W - 48, 668); bx.textAlign = 'left';
     btex.needsUpdate = true;
     if (monitor && jobs.some(k => status[k.id] && !status[k.id].done)) { monitor.draw = drawJob; monitor.live = true; }
   }
+  /* animate the carousel (~20 fps is plenty for a fade) */
+  setInterval(() => { if (!document.hidden) drawBoard(); }, 50);
 
   /* ---------- headlines for everyone; live portfolio + briefing only when the owner code is in this browser ---------- */
   let headlines = [], owner = null, briefed = false, spokeBrief = false;

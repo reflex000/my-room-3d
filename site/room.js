@@ -821,6 +821,33 @@ try {
     }
     if (chairBaked) { chairBaked.traverse(o => { if (o.isMesh) o.castShadow = true; }); avatar.setChair(chairBaked); }
     /* fallback for the v2 bake: carve the chair out of the merged props mesh */
+    /* props Sid asked to remove (jacket on the loft-bed guard, LEGO bin on the window sill). They are merged into room_props,
+       so drop every connected piece whose bounds sit entirely inside one of these room-space boxes. Remove from Blender too. */
+    const REMOVE = [
+      { name: 'clothes_jacket', min: [-0.80, 1.36, -0.80], max: [-0.58, 2.04, -0.28] },
+      { name: 'lego_bin',       min: [ 2.02, 0.48,  0.92], max: [ 2.47, 0.80,  1.30] },
+    ];
+    function dropPieces(mesh, boxes) {
+      if (!mesh || !mesh.geometry.index) return 0;
+      mesh.updateMatrix();
+      const g = mesh.geometry, idx = g.index.array, pos = g.attributes.position, n = pos.count;
+      const parent = new Int32Array(n); for (let i = 0; i < n; i++) parent[i] = i;
+      const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+      for (let i = 0; i < idx.length; i += 3) { const a = find(idx[i]), b = find(idx[i + 1]), c = find(idx[i + 2]); parent[b] = a; parent[c] = a; }
+      const bb = new Map(), v = new T.Vector3();
+      for (let i = 0; i < n; i++) {
+        const r = find(i); v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrix);
+        let e = bb.get(r); if (!e) { e = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; bb.set(r, e); }
+        e[0] = Math.min(e[0], v.x); e[1] = Math.min(e[1], v.y); e[2] = Math.min(e[2], v.z); e[3] = Math.max(e[3], v.x); e[4] = Math.max(e[4], v.y); e[5] = Math.max(e[5], v.z);
+      }
+      const gone = new Set();
+      for (const [r, e] of bb) if (boxes.some(b => e[0] >= b.min[0] && e[1] >= b.min[1] && e[2] >= b.min[2] && e[3] <= b.max[0] && e[4] <= b.max[1] && e[5] <= b.max[2])) gone.add(r);
+      if (!gone.size) return 0;
+      const keep = []; for (let i = 0; i < idx.length; i += 3) if (!gone.has(find(idx[i]))) keep.push(idx[i], idx[i + 1], idx[i + 2]);
+      const removed = (idx.length - keep.length) / 3; g.setIndex(keep); g.computeBoundingSphere(); return removed;
+    }
+    const removedTris = dropPieces(baked.getObjectByName('room_props'), REMOVE);
+    window.__removedTris = removedTris;
     const props = baked.getObjectByName('room_props');
     if (!chairBaked && props && props.geometry.index) {
       props.updateMatrix();

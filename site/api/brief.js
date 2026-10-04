@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
       summary: { crypto: s.crypto, stocks: s.stocks, grandTotal: s.grandTotal, total: s.grandTotal, change24Pct: s.crypto.change24Pct, cashToDeploy: s.cashToDeploy, asOf: s.asOf, notes: s.notes },
       holdings: s.holdings.map(h => ({ ticker: h.ticker, valueCad: h.valueCad, weightPct: h.weightPct, gainPct: h.gainPct, change24: h.change24, live: h.live })),
       btc: s.btc, goal: s.goal, charts: ctx.charts,
-      headlines: ctx.headlines.map(n => ({ source: n.source, title: n.title, link: n.link, time: n.time, tags: n.tags, hot: n.hot })),
+      headlines: ctx.headlines.map(n => ({ source: n.source, title: n.title, link: n.link, time: n.time, tags: n.tags, hot: n.hot, summary: n.summary })),
     });
   } catch (e) { res.status(502).json({ error: String(e.message || e).slice(0, 200) }); }
 };
