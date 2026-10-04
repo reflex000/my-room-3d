@@ -880,5 +880,6 @@ try {
     frame();
     baked.updateMatrixWorld(true);
   };
-  loader.load('./room-v4.glb', (g) => { g.userData.v4 = true; onGlb(g); }, undefined, () => loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {})));
+  /* room-v4 (first GPU bake) was noisy and its TV panel sat in front of the live board: stay on the clean v3 bake */
+  loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {}));
 } catch (e) { /* loader unavailable offline — primitive room stays */ }
