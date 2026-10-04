@@ -97,28 +97,58 @@ async function charts(portfolio, max = 5) {
 }
 
 /* ---------- news (public RSS) ---------- */
+/* themes Sid follows; every feed is public. RSS (<item>) and Atom (<entry>) are both parsed. */
 const FEEDS = [
-  ['CoinDesk', 'https://www.coindesk.com/arc/outboundfeeds/rss/'],
-  ['Cointelegraph', 'https://cointelegraph.com/rss'],
-  ['Decrypt', 'https://decrypt.co/feed'],
-  ['The Block', 'https://www.theblock.co/rss.xml'],
+  ['crypto', 'CoinDesk', 'https://www.coindesk.com/arc/outboundfeeds/rss/'],
+  ['crypto', 'Cointelegraph', 'https://cointelegraph.com/rss'],
+  ['crypto', 'Decrypt', 'https://decrypt.co/feed'],
+  ['crypto', 'The Block', 'https://www.theblock.co/rss.xml'],
+  ['markets', 'CNBC', 'https://www.cnbc.com/id/100003114/device/rss/rss.html'],
+  ['markets', 'MarketWatch', 'https://feeds.content.dowjones.io/public/rss/mw_topstories'],
+  ['ai', 'TechCrunch', 'https://techcrunch.com/category/artificial-intelligence/feed/'],
+  ['ai', 'The Verge', 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml'],
+  ['space', 'SpaceNews', 'https://spacenews.com/feed/'],
+  ['energy', 'World Nuclear News', 'https://www.world-nuclear-news.org/rss'],
+  ['tesla', 'Electrek', 'https://electrek.co/guides/tesla/feed/'],
 ];
-const unescape = (s) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#0?39;|&apos;|&#8217;|&#x27;/g, "'").replace(/&quot;|&#8220;|&#8221;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#8211;|&#8212;/g, '—').replace(/\s+/g, ' ').trim();
+const REDDIT = ['Bitcoin', 'CryptoCurrency', 'stocks', 'investing'];
+const unescape = (s) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#0?39;|&apos;|&#8217;|&#x27;/g, "'").replace(/&quot;|&#8220;|&#8221;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#8211;|&#8212;/g, '—').replace(/&#\d+;/g, ' ').replace(/\s+/g, ' ').trim();
+function parseFeed(xml, max = 15) {
+  const atom = !/<item[\s>]/.test(xml) && /<entry[\s>]/.test(xml), out = [];
+  for (const it of xml.split(atom ? /<entry[\s>]/ : /<item[\s>]/).slice(1, max + 1)) {
+    const pick = (tag) => { const m = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)</' + tag + '>').exec(it); return m ? unescape(m[1]) : ''; };
+    const link = atom ? ((/<link[^>]*href="([^"]+)"/.exec(it) || [])[1] || '') : pick('link');
+    const t = Date.parse(pick(atom ? 'updated' : 'pubDate') || pick('published'));
+    const title = pick('title');
+    if (title && link) out.push({ title: title.slice(0, 180), link: link.replace(/&amp;/g, '&'), time: isNaN(t) ? null : t, summary: (pick('description') || pick('summary') || pick('content')).slice(0, 240) });
+  }
+  return out;
+}
+async function getFeed(url) { const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(8000) }); if (!r.ok) throw new Error(url + ' ' + r.status); return r.text(); }
 const news = () => cached('news', 10 * 60e3, async () => {
   const all = [];
-  await Promise.all(FEEDS.map(async ([source, url]) => {
-    try {
-      const r = await fetch(url, { headers: UA }); if (!r.ok) return;
-      const xml = await r.text();
-      for (const it of xml.split(/<item[\s>]/).slice(1, 16)) {
-        const pick = (tag) => { const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`).exec(it); return m ? unescape(m[1]) : ''; };
-        const title = pick('title'), link = pick('link'), t = Date.parse(pick('pubDate'));
-        if (title && link) all.push({ source, title: title.slice(0, 180), link, time: isNaN(t) ? null : t, summary: pick('description').slice(0, 220) });
-      }
-    } catch (e) {}
+  await Promise.all(FEEDS.map(async ([theme, source, url]) => {
+    try { for (const n of parseFeed(await getFeed(url))) all.push({ ...n, source, theme }); } catch (e) {}
   }));
-  const seen = new Set();
-  return all.filter(n => { const k = n.title.toLowerCase().slice(0, 50); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => (b.time || 0) - (a.time || 0)).slice(0, 40);
+  const seen = new Set(), dayAgo = Date.now() - 36 * 3600e3;
+  return all.filter(n => { const k = n.title.toLowerCase().slice(0, 50); if (seen.has(k)) return false; seen.add(k); return !n.time || n.time > dayAgo - 48 * 3600e3; })
+    .sort((a, b) => (b.time || 0) - (a.time || 0)).slice(0, 120);
+});
+/* a balanced pick for the board: newest per theme, round-robin so crypto does not drown everything */
+function mixThemes(items, n = 12, order = ['crypto', 'markets', 'ai', 'space', 'energy', 'tesla']) {
+  const by = {}; for (const it of items) (by[it.theme] ||= []).push(it);
+  const out = []; for (let i = 0; out.length < n && i < 20; i++) for (const t of order) { const x = (by[t] || [])[i]; if (x && out.length < n) out.push(x); }
+  return out;
+}
+/* what retail is talking about (titles only; Reddit is sentiment, not a source of facts) */
+const reddit = () => cached('reddit', 60 * 60e3, async () => {
+  const out = [];
+  for (const sub of REDDIT) {                          // one at a time: Reddit rate-limits parallel requests
+    try { for (const n of parseFeed(await getFeed(`https://www.reddit.com/r/${sub}/top/.rss?t=day`), 10)) if (!/daily (discussion|thread)|weekly/i.test(n.title)) out.push({ sub, title: n.title, link: n.link }); } catch (e) {}
+    await new Promise(r => setTimeout(r, 1200));
+  }
+  if (!out.length) throw new Error('reddit unavailable');   // keep the last good copy in the cache
+  return out;
 });
 
 /* headlines that touch what he holds or watches, plus alert keywords */
@@ -148,4 +178,4 @@ function relevantNews(items, portfolio, watchlist) {
   }).filter(n => n.tags.length).sort((a, b) => b.score - a.score || (b.time || 0) - (a.time || 0));
 }
 
-module.exports = { snapshot, charts, news, relevantNews };
+module.exports = { snapshot, charts, news, relevantNews, mixThemes, reddit };
