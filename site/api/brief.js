@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
         method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + process.env.OPENAI_API_KEY },
         body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4.1-mini', max_completion_tokens: 260, messages: [
           { role: 'system', content: OWNER_RULES + '\n\n' + ctx.text },
-          { role: 'user', content: `Give me my briefing as you would say it out loud when I walk into the room: about 70 words, plain sentences, no lists or symbols. Order: ${order || 'total value, 24h change, biggest movers, goal progress, news'}. Mention at most two news items and say who reported them. If something is flagged as worth flagging now, lead with it. Do not tell me what to do.` },
+          { role: 'user', content: `Give me my briefing as you would say it out loud when I walk into the room: about 70 words, plain sentences, no lists. Write numbers as digits, like $109,000 and 0.2%. Order: ${order || 'total value, 24h change, biggest movers, goal progress, news'}. Mention at most two news items and say who reported them. If something is flagged as worth flagging now, lead with it. Do not tell me what to do.` },
         ] }),
       });
       const d = await r.json().catch(() => ({}));
