@@ -30,16 +30,19 @@ const TOOLS = [
     parameters: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ACTIONS } } } } },
 ];
 
-async function digestText() {
+/* read the digest through our own CDN-cached endpoint (shared across instances; this function's memory is not) */
+async function digestText(host) {
   try {
-    const d = await Promise.race([digest(), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 6000))]);
+    let d = null;
+    if (host) { const r = await fetch(`https://${host}/api/digest`, { signal: AbortSignal.timeout(4000) }).catch(() => null); if (r && r.ok) d = await r.json().catch(() => null); }
+    if (!d) d = await Promise.race([digest(), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 3000))]);
     return d && d.text ? `# Today's research digest (public news + Reddit pulse; ${new Date(d.generatedAt).toISOString().slice(0, 16)}Z)
 Use this when people ask what is happening in crypto, markets, AI, space, energy or Tesla. Attribute to the outlet; Reddit is sentiment, not fact; no predictions.
 ${d.text}` : '';
   } catch (e) { return ''; }
 }
 
-async function systemPrompt(jobTokens, voice, role, unlocked) {
+async function systemPrompt(jobTokens, voice, role, unlocked, host) {
   const { persona, skills } = readSkills();                      // desk rules + executable playbooks that ship with the site (public-safe)
   const jobs = (jobTokens || []).map(verifyJob).filter(Boolean).slice(-5).map(j => { const s = jobStatus(j); return `- ${s.id} (${s.skill}): ${s.stageLabel}${s.done ? ' — outputs: ' + JSON.stringify(s.outputs) : ''}`; });
   /* private brain: who Sid is + the skills this caller is allowed to hear; owner also gets his live portfolio */
@@ -60,7 +63,7 @@ General knowledge (how markets, crypto, stocks, trading strategies work), news a
     brainText,
     '# Things this desk can execute\n' + (skills.map(s => `## ${s.name}\n${s.text}`).join('\n\n') || '(none loaded)'),
     ownerText,
-    await digestText(),
+    await digestText(host),
     `# System context\nmode: ${MODE}\ncaller: ${role}\ndate: ${new Date().toISOString().slice(0, 10)}\nvisitor tickets:\n${jobs.join('\n') || '- none yet'}`,
     voice ? '# Voice conversation\nThe visitor is talking to you out loud and your reply will be spoken in your voice. Answer the way you would say it across a desk: one or two short sentences, contractions, no lists, no emoji, no symbols or markdown, numbers the way people say them. Their words come from speech recognition, so forgive small transcription mistakes and ask if something is unclear.' : '',
   ].filter(Boolean).join('\n\n');
@@ -104,7 +107,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role, role === 'owner' && sessionOk(body.session)) }, ...history];
+  const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role, role === 'owner' && sessionOk(body.session), req.headers.host) }, ...history];
   const actions = []; let job = null, reply = '';
   try {
     for (let round = 0; round < 4; round++) {

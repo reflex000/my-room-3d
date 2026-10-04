@@ -342,6 +342,7 @@ export function initSRE({ T, stage, avatar, screens }) {
     if (o && o.brief) { messages.push({ role: 'assistant', content: o.brief }); addMsg('assistant', o.brief); if (speakOn) speakReply(o.brief.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ')); }
   }
   loadNews(); setInterval(loadNews, 10 * 60e3);
+  fetch('/api/digest').catch(() => {});   // warm the daily digest so the avatar can talk from it right away
   setInterval(() => { if (unlocked()) loadOwner(false); }, 5 * 60e3);
 
   /* ---------- open / close ---------- */
