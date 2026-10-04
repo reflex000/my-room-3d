@@ -111,8 +111,8 @@ export function initSRE({ T, stage, avatar, screens }) {
     } catch (e) {} finally { av('speaking', false); }
     return ok;
   }
-  /* one reply at a time, in order */
-  function speakReply(text) { speakChain = speakChain.then(() => speakNow(text)); return speakChain; }
+  /* a new reply cuts off whatever he is still saying (like a person would), then speaks */
+  function speakReply(text) { voice.stopSpeaking(); speakChain = speakChain.catch(() => {}).then(() => speakNow(text)); return speakChain; }
   async function voiceConversation() {
     while (voiceLoop && open) {
       setV('listening'); let rec = null;
