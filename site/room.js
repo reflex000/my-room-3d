@@ -846,7 +846,7 @@ try {
       const keep = []; for (let i = 0; i < idx.length; i += 3) if (!gone.has(find(idx[i]))) keep.push(idx[i], idx[i + 1], idx[i + 2]);
       const removed = (idx.length - keep.length) / 3; g.setIndex(keep); g.computeBoundingSphere(); return removed;
     }
-    const removedTris = dropPieces(baked.getObjectByName('room_props'), REMOVE);
+    const removedTris = gltf.userData.v4 ? 0 : dropPieces(baked.getObjectByName('room_props'), REMOVE);   // v4 bake no longer contains them
     window.__removedTris = removedTris;
     const props = baked.getObjectByName('room_props');
     if (!chairBaked && props && props.geometry.index) {
@@ -880,5 +880,5 @@ try {
     frame();
     baked.updateMatrixWorld(true);
   };
-  loader.load('./room-v4.glb', onGlb, undefined, () => loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {})));
+  loader.load('./room-v4.glb', (g) => { g.userData.v4 = true; onGlb(g); }, undefined, () => loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {})));
 } catch (e) { /* loader unavailable offline — primitive room stays */ }
