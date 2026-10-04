@@ -99,12 +99,14 @@ export function initSRE({ T, stage, avatar, screens }) {
   const voice = createVoice({ onLevel: (v) => av('mouth', v), onMic: (v) => { if (micBtn && vState === 'listening') micBtn.style.boxShadow = `0 0 0 ${Math.round(v * 10)}px rgba(214,69,93,.25)`; } });
   const setV = (s) => { vState = s; renderFoot(); };
   paintSpk();
-  async function speakNow(text) {
+  let speakGen = 0;
+  async function speakNow(text, gen) {
     let ok = false;
     try {
       const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, text }) });
       if (!r.ok) { addMsg('system', 'Voice is unavailable right now (' + r.status + ').'); return false; }
-      const buf = await r.arrayBuffer(); const prev = vState; setV('speaking'); av('speaking', true); av('converse', true);
+      const buf = await r.arrayBuffer(); if (gen !== speakGen) return false;   // a newer reply arrived while this one was loading
+      const prev = vState; setV('speaking'); av('speaking', true); av('converse', true);
       ok = await voice.speak(buf);
       if (vState === 'speaking') setV(voiceLoop ? 'thinking' : (prev === 'speaking' ? 'idle' : prev));
       if (!ok) {
@@ -116,7 +118,7 @@ export function initSRE({ T, stage, avatar, screens }) {
     return ok;
   }
   /* a new reply cuts off whatever he is still saying (like a person would), then speaks */
-  function speakReply(text) { voice.stopSpeaking(); speakChain = speakChain.catch(() => {}).then(() => speakNow(text)); return speakChain; }
+  function speakReply(text) { const gen = ++speakGen; voice.stopSpeaking(); return speakNow(text, gen); }
   async function voiceConversation() {
     while (voiceLoop && open) {
       setV('listening'); let rec = null;
@@ -326,7 +328,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   /* ---------- open / close ---------- */
   function setOpen(v) {
     open = v; panel.classList.toggle('open', v); launch.style.display = v ? 'none' : ''; tossBtn.style.display = v ? 'none' : '';
-    if (v) { voice.unlock(); if (speakOn && owner && owner.brief && !spokeBrief) { spokeBrief = true; speakReply(owner.brief); }
+    if (v) { voice.unlock(); if (speakOn && owner && owner.brief && !spokeBrief) { spokeBrief = true; speakReply(owner.brief.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ')); }
       if (!messages.length && invite) greet(); av('converse', true); av('sit', () => av('play', 'wave')); renderFoot(); }
     else { av('converse', false); if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); } }
   }
