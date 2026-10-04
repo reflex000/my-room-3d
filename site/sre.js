@@ -282,7 +282,7 @@ export function initSRE({ T, stage, avatar, screens }) {
       const hot = n.hot && n.hot.length;
       bx.fillStyle = hot ? '#ff6b7a' : '#4aa8e0'; bx.beginPath(); bx.roundRect(48 + dx, 136, 12, 300, 6); bx.fill();
       bx.font = '700 22px system-ui,sans-serif'; bx.fillStyle = hot ? '#ff9aa5' : '#8fc9ef';
-      bx.fillText(`${(n.source || '').toUpperCase()}  ·  ${ago(n.time)} AGO${n.tags && n.tags.length ? '  ·  ' + n.tags.slice(0, 4).join('  ') : ''}${hot ? '  ·  ' + n.hot[0].toUpperCase() : ''}`, 84 + dx, 156);
+      bx.fillText(`${n.theme ? n.theme.toUpperCase() + '  ·  ' : ''}${(n.source || '').toUpperCase()}  ·  ${ago(n.time)} AGO${n.tags && n.tags.length ? '  ·  ' + n.tags.slice(0, 4).join('  ') : ''}${hot ? '  ·  ' + n.hot[0].toUpperCase() : ''}`, 84 + dx, 156);
       bx.font = '800 50px system-ui,sans-serif'; bx.fillStyle = '#f2f6f9';
       wrap(bx, n.title, W - 150, 3).forEach((ln, i) => bx.fillText(ln, 84 + dx, 222 + i * 62));
       if (n.summary) { bx.font = '400 26px system-ui,sans-serif'; bx.fillStyle = '#a9bac6'; wrap(bx, n.summary, W - 150, 2).forEach((ln, i) => bx.fillText(ln, 84 + dx, 418 + i * 36)); }
