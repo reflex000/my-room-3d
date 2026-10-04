@@ -35,7 +35,7 @@ async function systemPrompt(jobTokens, voice, role, unlocked) {
   let brainText = '', ownerText = '';
   if (hasBrain()) {
     try {
-      const brain = await loadBrain(role);
+      const brain = await loadBrain(role === 'owner' && !unlocked ? 'guest' : role);   // owner-only skills (trading style, family) need the passphrase too
       brainText = [brain.persona && '# Who you are (Sid)\n' + brain.persona, ...brain.skills.map(k => `# Skill: ${k.name}\n${k.text}`)].filter(Boolean).join('\n\n');
       if (role === 'owner' && unlocked) { const ctx = await ownerContext(brain); if (ctx) ownerText = OWNER_RULES + '\n\n# Live data (private mode is ON — he unlocked it with his passphrase)\n' + ctx.text; }
       else if (role === 'owner') ownerText = `# Talking to Sid himself — private mode is LOCKED
