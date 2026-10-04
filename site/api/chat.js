@@ -85,6 +85,15 @@ module.exports = async (req, res) => {
     .map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
   if (!history.length || history[history.length - 1].role !== 'user') { res.status(400).json({ error: 'last message must be from the user' }); return; }
 
+  /* locked owner asking about his own money/plans: ask for the passphrase straight away (deterministic, no model call) */
+  const lastUser = history[history.length - 1].content;
+  if (role === 'owner' && !sessionOk(body.session) &&
+      (/\b(show|put)\b.*\bboard\b/i.test(lastUser) ||
+       (/\b(my|mine|mera|meri|mere|i hold|i own|i have)\b/i.test(lastUser) && /\b(portfolio|holdings?|btc|bitcoin|eth|crypto|coins?|stocks?|shares?|positions?|gains?|loss(es)?|profit|money|net ?worth|trigger|target|goal|loan|mortgage|savings|cash|account|balance|p&l|pnl)\b/i.test(lastUser)))) {
+    res.status(200).json({ reply: "That's personal — say your passphrase and I'll pull it up.", actions: ['ask_passphrase'], job: null, mode: MODE, role });
+    return;
+  }
+
   const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role, role === 'owner' && sessionOk(body.session)) }, ...history];
   const actions = []; let job = null, reply = '';
   try {
