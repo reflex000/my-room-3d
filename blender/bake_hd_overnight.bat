@@ -7,5 +7,5 @@ for %%G in (room_shell desk_items room_props chair) do (
   %BLENDER% -b myroom.blend --python step3_bake.py -- --group %%G --hd
 )
 %BLENDER% -b myroom.blend --python step4_export.py
-echo === ALL DONE: room-v3.glb ===
+echo === ALL DONE: room-v4.glb ===
 pause

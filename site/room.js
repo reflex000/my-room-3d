@@ -880,5 +880,5 @@ try {
     frame();
     baked.updateMatrixWorld(true);
   };
-  loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {}));
+  loader.load('./room-v4.glb', onGlb, undefined, () => loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {})));
 } catch (e) { /* loader unavailable offline — primitive room stays */ }

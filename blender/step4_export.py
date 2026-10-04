@@ -1,5 +1,5 @@
 import bpy, os
-out = os.path.join(os.path.dirname(bpy.data.filepath), 'room-v3.glb')
+out = os.path.join(os.path.dirname(bpy.data.filepath), 'room-v4.glb')
 bpy.ops.object.select_all(action='DESELECT')
 for o in bpy.context.scene.objects:
     if o.type == 'MESH': o.select_set(True)

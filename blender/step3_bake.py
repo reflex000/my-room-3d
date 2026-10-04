@@ -31,6 +31,18 @@ CHAIR_PIVOT, CHAIR_ROT = Vector((0.5, 0.28, 0.0)), -0.35
 
 sc = bpy.context.scene
 sc.render.engine = 'CYCLES'
+try:
+    cp = bpy.context.preferences.addons['cycles'].preferences
+    for kind in ('ONEAPI', 'OPTIX', 'CUDA', 'HIP', 'METAL'):
+        try:
+            cp.compute_device_type = kind; cp.get_devices()
+            gpus = [d for d in cp.devices if d.type == kind]
+            if gpus:
+                for d in cp.devices: d.use = (d.type == kind)
+                sc.cycles.device = 'GPU'; print('bake device: GPU', kind, [d.name for d in gpus]); break
+        except Exception: pass
+    else: print('bake device: CPU')
+except Exception as e: print('bake device: CPU (', e, ')')
 if not bpy.data.filepath:
     raise Exception('Save the .blend first (File > Save As), then run again.')
 out_dir = os.path.dirname(bpy.data.filepath)
