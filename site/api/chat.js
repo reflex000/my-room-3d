@@ -114,6 +114,9 @@ module.exports = async (req, res) => {
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
       }
     }
+    /* belt and braces: if the locked owner is being asked for his passphrase, make sure the client captures the next
+       message as the passphrase (so it never reaches this model) even if the model forgot to call the tool */
+    if (role === 'owner' && !sessionOk(body.session) && /pass\s?phrase/i.test(reply) && !actions.includes('ask_passphrase')) actions.push('ask_passphrase');
     res.status(200).json({ reply: reply || (job ? `Ticket ${job.status.id} is open — I'm on it.` : '…'), actions, job, mode: MODE, role });
   } catch (e) {
     res.status(502).json({ error: String(e.message || e).slice(0, 200) });
