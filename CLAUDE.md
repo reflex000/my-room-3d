@@ -17,3 +17,11 @@
 ## Pipeline
 step2_build_room.py (geometry, lights, rz signs = web rotation.y) → step3_bake.py (per-group) → step4_export.py (room-v3.glb) → drop glb in chat → site/room-v3.glb.
 Viewer loads room-v3.glb, falls back to room.glb. Avatar (me.glb) is real-time lit, never baked. Window view is a live canvas (photo option: site/window-view.jpg).
+
+## How we work (feature branches + issues)
+- Every piece of work has a GitHub issue (backlog: `gh issue list`). Labels: `feature`, `in-progress`, `blocked-on-sid`, `privacy`.
+- Work happens on a branch `feature/<short-name>` with a **draft PR** that says `Refs #<issue>`. The PR stays open while the work is unfinished, so it is visible what is left.
+- Merge to `main` only when the feature is done and tested; then deploy production from `main` (`cd site && npx vercel --prod --yes`) and close the issue (`Closes #n` in the merge).
+- Unfinished work stays on its branch. Small fixes to live problems go on a `fix/<name>` branch the same way.
+- Public repo: never put portfolio numbers, employer details, codes or other private facts in issues, PRs, commits or code. Private data lives in the private `sid-brain` repo.
+- The 3D/Blender side (bakes, room-vN.glb) belongs to Sid; the code side does not bake.
