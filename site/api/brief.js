@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     const s = ctx.snapshot;
     res.status(200).json({
       role, brief, pokes: ctx.pokes,
-      summary: { total: s.total, cost: s.cost, gain: s.gain, gainPct: s.gainPct, change24Pct: s.change24Pct, cashToDeploy: s.cashToDeploy, asOf: s.asOf, notes: s.notes },
+      summary: { crypto: s.crypto, stocks: s.stocks, grandTotal: s.grandTotal, total: s.grandTotal, change24Pct: s.crypto.change24Pct, cashToDeploy: s.cashToDeploy, asOf: s.asOf, notes: s.notes },
       holdings: s.holdings.map(h => ({ ticker: h.ticker, valueCad: h.valueCad, weightPct: h.weightPct, gainPct: h.gainPct, change24: h.change24, live: h.live })),
       btc: s.btc, goal: s.goal, charts: ctx.charts,
       headlines: ctx.headlines.map(n => ({ source: n.source, title: n.title, link: n.link, time: n.time, tags: n.tags, hot: n.hot })),

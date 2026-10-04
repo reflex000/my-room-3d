@@ -48,6 +48,15 @@ async function snapshot(portfolio) {
   const stale = rows.filter(r => !r.live && r.status !== 'suspended').map(r => r.ticker);
   if (stale.length) notes.push('no live price for: ' + stale.join(', '));
   const movers = rows.filter(r => r.change24 != null && r.valueCad > 200).sort((a, b) => Math.abs(b.change24) - Math.abs(a.change24)).slice(0, 4);
+  /* accounts, the way the app shows them */
+  const ca = (portfolio.accounts && portfolio.accounts.crypto) || {};
+  const cryptoCoins = rows.filter(r => r.type === 'crypto').reduce((a, r) => a + r.valueCad, 0);
+  const cryptoCost = rows.filter(r => r.type === 'crypto').reduce((a, r) => a + r.costCad, 0);
+  const cryptoCash = ca.cash_cad || 0, cryptoAccount = cryptoCoins + cryptoCash;
+  const cryptoReturn = ca.net_deposits_cad ? cryptoAccount - ca.net_deposits_cad : cryptoCoins - cryptoCost;
+  const cryptoPrev = rows.filter(r => r.type === 'crypto').reduce((a, r) => a + (r.change24 == null ? r.valueCad : r.valueCad / (1 + r.change24 / 100)), 0) + cryptoCash;
+  const stockRows = rows.filter(r => r.type === 'stock'), stockValue = stockRows.reduce((a, r) => a + r.valueCad, 0), stockCost = stockRows.reduce((a, r) => a + r.costCad, 0);
+  const grand = cryptoAccount + stockValue;
   const btc = rows.find(r => r.ticker === 'BTC'), g = portfolio.goals || {};
   const monthly = g.freedom_number && g.freedom_number.monthly_income_cad;
   return {
@@ -55,9 +64,13 @@ async function snapshot(portfolio) {
     total, cost, gain: total - cost, gainPct: cost ? (total / cost - 1) * 100 : null, change24Pct: prev ? (total / prev - 1) * 100 : null,
     cryptoValue: rows.filter(r => r.type === 'crypto').reduce((a, r) => a + r.valueCad, 0), stockValue: rows.filter(r => r.type === 'stock').reduce((a, r) => a + r.valueCad, 0),
     cashToDeploy: g.cash_to_deploy_cad || 0,
+    crypto: { account: cryptoAccount, coins: cryptoCoins, cash: cryptoCash, netDeposits: ca.net_deposits_cad || null, allTimeReturn: cryptoReturn,
+              allTimeReturnPct: ca.net_deposits_cad ? cryptoReturn / ca.net_deposits_cad * 100 : (cryptoCost ? cryptoReturn / cryptoCost * 100 : null), change24Pct: cryptoPrev ? (cryptoAccount / cryptoPrev - 1) * 100 : null },
+    stocks: { value: stockValue, cost: stockCost, gain: stockValue - stockCost, gainPct: stockCost ? (stockValue / stockCost - 1) * 100 : null },
+    grandTotal: grand,
     holdings: rows.sort((a, b) => b.valueCad - a.valueCad), movers,
     btc: btc ? { price: btc.price, owned: btc.quantity, toOneBtc: Math.max(0, 1 - btc.quantity), trigger: 200000, toTriggerPct: (200000 / btc.price - 1) * 100 } : null,
-    goal: monthly ? { monthly, yearly: monthly * 12, at4pct: monthly * 12 / 0.04, at3pct: monthly * 12 / 0.03, progressAt4pct: (total + (g.cash_to_deploy_cad || 0)) / (monthly * 12 / 0.04) * 100 } : null,
+    goal: monthly ? { monthly, yearly: monthly * 12, at4pct: monthly * 12 / 0.04, at3pct: monthly * 12 / 0.03, progressAt4pct: (grand + (g.cash_to_deploy_cad || 0)) / (monthly * 12 / 0.04) * 100 } : null,
     alerts: portfolio.alerts || {}, notes,
   };
 }

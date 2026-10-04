@@ -220,9 +220,11 @@ export function initSRE({ T, stage, avatar, screens }) {
     bx.fillStyle = '#10202c'; bx.fillRect(0, 0, 1024, 84);
     bx.fillStyle = '#e9f2f6'; bx.font = '700 40px system-ui,sans-serif'; bx.fillText("SID'S BOARD", 36, 44);
     if (owner && owner.summary) {                                   // only in Sid's own browser
-      const up = (owner.summary.change24Pct || 0) >= 0;
-      bx.textAlign = 'right'; bx.font = '700 30px system-ui,sans-serif'; bx.fillStyle = up ? '#7ee0b3' : '#ff8a8a';
-      bx.fillText(`$${Math.round(owner.summary.total).toLocaleString('en-CA')}  ${up ? '▲' : '▼'} ${Math.abs(owner.summary.change24Pct || 0).toFixed(1)}% 24h`, 992, 44); bx.textAlign = 'left';
+      const cr = owner.summary.crypto || {}, up = (cr.change24Pct || 0) >= 0, k = (v) => '$' + (v / 1000).toFixed(1) + 'k';
+      bx.textAlign = 'right'; bx.font = '700 27px system-ui,sans-serif'; bx.fillStyle = up ? '#7ee0b3' : '#ff8a8a';
+      bx.fillText(`Crypto ${k(cr.account || 0)} ${up ? '▲' : '▼'}${Math.abs(cr.change24Pct || 0).toFixed(1)}%`, 992, 32);
+      bx.font = '500 19px system-ui,sans-serif'; bx.fillStyle = '#9fb3c1';
+      bx.fillText(`Stocks ${k((owner.summary.stocks || {}).value || 0)} · all-time ${(cr.allTimeReturn || 0) >= 0 ? '+' : '−'}$${Math.round(Math.abs(cr.allTimeReturn || 0)).toLocaleString('en-CA')}`, 992, 62); bx.textAlign = 'left';
     }
     /* top news */
     const mine = owner && owner.headlines ? owner.headlines : [], seen = new Set(mine.map(n => n.title));
@@ -264,7 +266,7 @@ export function initSRE({ T, stage, avatar, screens }) {
       if (withText && d.brief && !briefed) {
         briefed = true; sub.textContent = 'Owner mode — your portfolio and news are loaded';
         messages.push({ role: 'assistant', content: d.brief }); addMsg('assistant', d.brief);
-        const s0 = d.summary, lead = d.pokes && d.pokes.length ? 'Heads up — ' + d.pokes[0] : `Portfolio $${Math.round(s0.total).toLocaleString('en-CA')}, ${(s0.change24Pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(s0.change24Pct || 0).toFixed(1)}% today. Click me for the briefing.`;
+        const s0 = d.summary, lead = d.pokes && d.pokes.length ? 'Heads up — ' + d.pokes[0] : `Crypto $${Math.round((s0.crypto || {}).account || 0).toLocaleString('en-CA')}, ${(s0.change24Pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(s0.change24Pct || 0).toFixed(1)}% today. Click me for the briefing.`;
         const tell = () => { if (avatar.ready) av('say', lead.length > 150 ? lead.slice(0, 147) + '…' : lead, 9); else setTimeout(tell, 1500); }; setTimeout(tell, 4500);
       }
     } catch (e) {}
