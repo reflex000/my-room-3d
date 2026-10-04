@@ -20,11 +20,13 @@ if '--hd' in args: HD = True
 
 SIZES = {'room_shell': 1024, 'desk_items': 1024, 'room_props': 2048, 'chair': 512}
 if HD: SIZES = {'room_shell': 2048, 'desk_items': 2048, 'room_props': 4096, 'chair': 1024}
-SAMPLES = 256 if HD else 32
+SAMPLES = 512 if HD else 128   # bakes never get Cycles denoising, so samples alone control grain (32 was too grainy)
 ORDER = ['room_shell', 'desk_items', 'room_props', 'chair']
 
+# small desk objects only: big flat surfaces (desk top, monitors, drawer) moved to room_props so the 1024 map
+# goes to the duck, clock, mouse, plush, laptops, notebooks -> ~3-4x more pixels each at the same bake time
 DESK_ITEMS = ('duck_', 'clock_', 'mouse', 'pup_', 'teal_', 'headphone_', 'cards_', 'spray_', 'bike_light', 'cup_holder', 'pen_',
-              'card_red', 'laptop_', 'monitor_', 'desk_top', 'desk_controller', 'desk_drawer', 'desk_side_tray', 'tray_arm')
+              'card_red', 'laptop_', 'homer_')
 SHELL = ('floor', 'wall_', 'baseboard', 'door', 'window_frame', 'window_mullion', 'window_sill', 'light_switch', 'thermostat', 'outlet', 'rug', 'bed_rug', 'curtain_rod', 'curtain_finial')
 KEEP_SEPARATE = {'screen_main', 'screen_side', 'screen_laptop', 'laptop_hp_screen', 'window_glass', 'led_strip_desk', 'led_strip_bed', 'bed_light_bulb'}
 CHAIR_PIVOT, CHAIR_ROT = Vector((0.5, 0.28, 0.0)), -0.35
