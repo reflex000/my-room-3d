@@ -846,7 +846,7 @@ try {
       const keep = []; for (let i = 0; i < idx.length; i += 3) if (!gone.has(find(idx[i]))) keep.push(idx[i], idx[i + 1], idx[i + 2]);
       const removed = (idx.length - keep.length) / 3; g.setIndex(keep); g.computeBoundingSphere(); return removed;
     }
-    const removedTris = gltf.userData.v4 ? 0 : dropPieces(baked.getObjectByName('room_props'), REMOVE);   // v4 bake no longer contains them
+    const removedTris = dropPieces(baked.getObjectByName('room_props'), REMOVE);
     window.__removedTris = removedTris;
     const props = baked.getObjectByName('room_props');
     if (!chairBaked && props && props.geometry.index) {
@@ -880,6 +880,5 @@ try {
     frame();
     baked.updateMatrixWorld(true);
   };
-  /* room-v4 (first GPU bake) was noisy and its TV panel sat in front of the live board: stay on the clean v3 bake */
   loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {}));
 } catch (e) { /* loader unavailable offline — primitive room stays */ }

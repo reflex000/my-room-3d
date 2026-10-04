@@ -9,4 +9,4 @@ for step in ('step2_build_room.py', 'step3_bake.py', 'step4_export.py'):
     print('=== running', step)
     runpy.run_path(os.path.join(here, step), run_name='__main__')
     bpy.ops.wm.save_mainfile()
-print('=== ALL DONE ->', os.path.join(here, 'room-v4.glb'))
+print('=== ALL DONE ->', os.path.join(here, 'room-v3.glb'))

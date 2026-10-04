@@ -368,6 +368,7 @@ cyl('ladder_rail_1', 0.018, 1.95, FRAME, 0, 0.2, 0.975, verts=14, bevel=0, paren
 cyl('ladder_rail_2', 0.018, 1.95, FRAME, 0, -0.2, 0.975, verts=14, bevel=0, parent=lad)
 for i in range(6):
     cyl(f'ladder_step_{i+1}', 0.015, 0.4, FRAME, 0, 0, 0.25 + i * 0.29, rot=(radians(90), 0, 0), verts=12, bevel=0, parent=lad)
+box('clothes_jacket', 0.06, 0.36, 0.55, BLACK, BW / 2 + 0.07, 0.45, BH + 0.25, rot=(0, 0.1, 0), bevel=0.03, parent=bed)
 box('clothes_khaki', 0.05, 0.2, 0.42, CREAM, BW / 2 + 0.08, 0.72, BH + 0.12, rot=(0, 0.08, 0), bevel=0.025, parent=bed)
 box('kids_chair_seat', 0.32, 0.3, 0.03, TEAL, 0.05, 0.55, 0.36, bevel=0.014, parent=bed)
 box('kids_chair_back', 0.3, 0.03, 0.3, TEAL, 0.05, 0.7, 0.53, rot=(0.15, 0, 0), bevel=0.014, parent=bed)
@@ -395,12 +396,7 @@ torus('basketball_seam_1', 0.12, 0.006, NAVY, 0, 0, 0.12, parent=bb)
 torus('basketball_seam_2', 0.12, 0.006, NAVY, 0, 0, 0.12, rot=(radians(90), 0, 0.6), parent=bb)
 torus('basketball_seam_3', 0.12, 0.004, WHITE, 0, 0, 0.12, rot=(0.5, 1.2, 0), parent=bb)
 cyl('waste_basket', 0.12, 0.26, TEAL, RX - 0.36, 0.06, 0.13, r2=0.15, verts=28)
-# Sid's board: wall-mounted screen on the back wall, right of the desk. The site draws the live news on a plane
-# 1 mm in front of 'wall_tv_screen'; baking the emissive panel puts its glow on the wall around it.
-# web centre (1.83, 1.80, -1.743) -> Blender (x, -z, y)
-TV_SCREEN = mat('wall_tv_screen', '0d1824', 0.25, emit='4a8fe8', strength=2.2)
-box('wall_tv_bezel', 1.196, 0.022, 0.6885, BLACK, 1.83, 1.7545, 1.80, bevel=0.006)
-box('wall_tv_screen', 1.16, 0.004, 0.6525, TV_SCREEN, 1.83, 1.7425, 1.80, bevel=0)
+box('lego_bin', 0.3, 0.2, 0.16, YELLOW, RX - 0.3, -1.1, 0.62, bevel=0.02)
 box('step_stool_top', 0.3, 0.2, 0.05, SKY, -0.5, -1.42, 0.24, bevel=0.02)
 for i, sg in enumerate((-1, 1)):
     box(f'step_stool_leg_{i+1}', 0.06, 0.18, 0.24, PINK, -0.5 + sg * 0.1, -1.42, 0.12, bevel=0.02)
