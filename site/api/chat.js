@@ -3,7 +3,9 @@
    → { reply, actions:[…], job?:{ token, status }, mode }
    The model can only (a) talk, (b) animate the avatar, (c) submit a request that validates against a skill schema.
    It never sees credentials and never produces commands; execution is a separate pipeline (simulated in Step 1). */
-const { MODE, inviteOk, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus } = require('./_lib.js');
+const { MODE, roleFor, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus } = require('./_lib.js');
+const { loadBrain, hasBrain } = require('./_brain.js');
+const { ownerContext, OWNER_RULES } = require('./_owner.js');
 
 const MODELS = (process.env.OPENAI_MODEL ? [process.env.OPENAI_MODEL] : []).concat(['gpt-4.1-mini', 'gpt-4o-mini', 'gpt-5-mini']);
 const ACTIONS = ['wave', 'nod', 'no', 'think', 'thumbs', 'laugh', 'shrug', 'drink', 'stretch'];
@@ -22,13 +24,24 @@ const TOOLS = [
     parameters: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ACTIONS } } } } },
 ];
 
-function systemPrompt(jobTokens, voice) {
-  const { persona, skills } = readSkills();
+async function systemPrompt(jobTokens, voice, role) {
+  const { persona, skills } = readSkills();                      // desk rules + executable playbooks that ship with the site (public-safe)
   const jobs = (jobTokens || []).map(verifyJob).filter(Boolean).slice(-5).map(j => { const s = jobStatus(j); return `- ${s.id} (${s.skill}): ${s.stageLabel}${s.done ? ' — outputs: ' + JSON.stringify(s.outputs) : ''}`; });
+  /* private brain: who Sid is + the skills this caller is allowed to hear; owner also gets his live portfolio */
+  let brainText = '', ownerText = '';
+  if (hasBrain()) {
+    try {
+      const brain = await loadBrain(role);
+      brainText = [brain.persona && '# Who you are (Sid)\n' + brain.persona, ...brain.skills.map(k => `# Skill: ${k.name}\n${k.text}`)].filter(Boolean).join('\n\n');
+      if (role === 'owner') { const ctx = await ownerContext(brain); if (ctx) ownerText = OWNER_RULES + '\n\n# Live data\n' + ctx.text; }
+    } catch (e) { brainText = ''; }
+  }
   return [
     persona,
-    '# Skills you can execute\n' + (skills.map(s => `## ${s.name}\n${s.text}`).join('\n\n') || '(none loaded)'),
-    `# System context\nmode: ${MODE}\ndate: ${new Date().toISOString().slice(0, 10)}\nvisitor tickets:\n${jobs.join('\n') || '- none yet'}`,
+    brainText,
+    '# Things this desk can execute\n' + (skills.map(s => `## ${s.name}\n${s.text}`).join('\n\n') || '(none loaded)'),
+    ownerText,
+    `# System context\nmode: ${MODE}\ncaller: ${role}\ndate: ${new Date().toISOString().slice(0, 10)}\nvisitor tickets:\n${jobs.join('\n') || '- none yet'}`,
     voice ? '# Voice conversation\nThe visitor is talking to you out loud and your reply will be spoken in your voice. Answer the way you would say it across a desk: one or two short sentences, contractions, no lists, no emoji, no symbols or markdown, numbers the way people say them. Their words come from speech recognition, so forgive small transcription mistakes and ask if something is unclear.' : '',
   ].filter(Boolean).join('\n\n');
 }
@@ -55,7 +68,8 @@ module.exports = async (req, res) => {
   const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x';
   if (rateLimited(ip)) { res.status(429).json({ error: 'slow down a little' }); return; }
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-  if (!inviteOk(body.invite)) { res.status(401).json({ error: 'invite_required' }); return; }
+  const role = roleFor(body.invite);
+  if (!role) { res.status(401).json({ error: 'invite_required' }); return; }
   if (!process.env.OPENAI_API_KEY) { res.status(503).json({ error: 'no LLM key configured' }); return; }
 
   const history = (Array.isArray(body.messages) ? body.messages : []).slice(-24)
@@ -63,7 +77,7 @@ module.exports = async (req, res) => {
     .map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
   if (!history.length || history[history.length - 1].role !== 'user') { res.status(400).json({ error: 'last message must be from the user' }); return; }
 
-  const messages = [{ role: 'system', content: systemPrompt(body.jobs, !!body.voice) }, ...history];
+  const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role) }, ...history];
   const actions = []; let job = null, reply = '';
   try {
     for (let round = 0; round < 4; round++) {
@@ -89,7 +103,7 @@ module.exports = async (req, res) => {
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
       }
     }
-    res.status(200).json({ reply: reply || (job ? `Ticket ${job.status.id} is open — I'm on it.` : '…'), actions, job, mode: MODE });
+    res.status(200).json({ reply: reply || (job ? `Ticket ${job.status.id} is open — I'm on it.` : '…'), actions, job, mode: MODE, role });
   } catch (e) {
     res.status(502).json({ error: String(e.message || e).slice(0, 200) });
   }

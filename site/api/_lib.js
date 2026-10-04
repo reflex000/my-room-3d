@@ -15,6 +15,14 @@ function inviteOk(code) {
   return list.some(x => { const b = Buffer.from(x); return b.length === c.length && crypto.timingSafeEqual(b, c); });
 }
 
+/* 'owner' (Sid himself) | 'guest' (invited visitor) | null */
+function roleFor(code) {
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const owners = (process.env.OWNER_CODES || '').split(',').map(norm).filter(Boolean), c = norm(code);
+  if (c && owners.some(x => x.length === c.length && crypto.timingSafeEqual(Buffer.from(x), Buffer.from(c)))) return 'owner';
+  return inviteOk(code) ? 'guest' : null;
+}
+
 const hits = new Map();
 function rateLimited(ip, max = 20, windowMs = 60000) {
   const now = Date.now(), arr = (hits.get(ip) || []).filter(t => now - t < windowMs);
@@ -141,4 +149,4 @@ function jobStatus(job, now = Date.now()) {
   };
 }
 
-module.exports = { MODE, inviteOk, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus };
+module.exports = { MODE, inviteOk, roleFor, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus };

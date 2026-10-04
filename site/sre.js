@@ -70,7 +70,7 @@ export function initSRE({ T, stage, avatar, screens }) {
         const v = i.value.trim(); if (!v || b.disabled) return; b.disabled = true; b.textContent = '…';
         let ok = false; try { const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite: v, messages: [] }) }); ok = r.status !== 401; } catch (e) {}
         if (!ok) { b.disabled = false; b.textContent = 'Enter'; addMsg('system', 'That code did not match — check for typos (it looks like guest-xxxxxxxx).'); return; }
-        invite = v; LS.set('sre.invite', invite); addMsg('system', 'Code accepted ✓'); renderFoot(); if (!messages.length) greet();
+        invite = v; LS.set('sre.invite', invite); addMsg('system', 'Code accepted ✓'); renderFoot(); if (!messages.length) greet(); loadOwner(true);
         if (pending) { const t = pending; pending = null; send(t); }
       };
       b.onclick = go; i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
@@ -213,22 +213,64 @@ export function initSRE({ T, stage, avatar, screens }) {
   const board = new T.Mesh(new T.PlaneGeometry(1.0, 0.625), new T.MeshBasicMaterial({ map: btex, toneMapped: false })); board.name = 'tickets_board';
   const frame = new T.Mesh(new T.BoxGeometry(1.06, 0.685, 0.03), new T.MeshStandardMaterial({ color: 0x0c0e12, roughness: 0.6 })); frame.name = 'tickets_board_frame'; frame.position.z = -0.018; board.add(frame);
   board.position.set(2.05, 1.66, -1.74); avatar.group.add(board);
+  const fit = (ctx, text, max) => { if (ctx.measureText(text).width <= max) return text; let t = text; while (t.length > 4 && ctx.measureText(t + '…').width > max) t = t.slice(0, -1); return t.trimEnd() + '…'; };
+  const ago = (t) => { if (!t) return ''; const h = (Date.now() - t) / 3600e3; return h < 1 ? Math.max(1, Math.round(h * 60)) + 'm' : h < 24 ? Math.round(h) + 'h' : Math.round(h / 24) + 'd'; };
   function drawBoard() {
-    bx.fillStyle = '#0b1219'; bx.fillRect(0, 0, 1024, 640);
-    bx.fillStyle = '#e9f2f6'; bx.font = '700 44px system-ui,sans-serif'; bx.textBaseline = 'middle'; bx.fillText('OPS BOARD', 40, 56);
-    bx.font = '600 22px system-ui,sans-serif'; bx.fillStyle = '#ffc46b'; bx.textAlign = 'right'; bx.fillText(badge.textContent.toUpperCase(), 984, 56); bx.textAlign = 'left';
-    const list = jobs.map(j => status[j.id]).filter(Boolean).slice(0, 5);
-    if (!list.length) { bx.fillStyle = '#7e96a4'; bx.font = '400 30px system-ui,sans-serif'; bx.fillText('No tickets yet — talk to Sid to open one.', 40, 330); }
-    list.forEach((s, i) => {
-      const y = 110 + i * 102; bx.fillStyle = '#132836'; bx.beginPath(); bx.roundRect(32, y, 960, 88, 14); bx.fill();
-      bx.fillStyle = '#9fd0ff'; bx.font = '700 28px ui-monospace,Consolas,monospace'; bx.fillText(s.id, 52, y + 30);
-      bx.fillStyle = '#e9f2f6'; bx.font = '500 24px system-ui,sans-serif'; bx.fillText(`${s.skill} · ${s.params.vm_size || ''} · ${s.params.region || ''}`, 250, y + 30);
-      bx.fillStyle = s.done ? '#7ee0b3' : '#ffc46b'; bx.textAlign = 'right'; bx.fillText(s.done ? 'DONE' : s.stageLabel, 972, y + 30); bx.textAlign = 'left';
-      bx.fillStyle = '#0b1219'; bx.fillRect(52, y + 58, 920, 12); bx.fillStyle = '#3fb98f'; bx.fillRect(52, y + 58, 920 * s.progress, 12);
+    bx.fillStyle = '#0b1219'; bx.fillRect(0, 0, 1024, 640); bx.textBaseline = 'middle'; bx.textAlign = 'left';
+    bx.fillStyle = '#10202c'; bx.fillRect(0, 0, 1024, 84);
+    bx.fillStyle = '#e9f2f6'; bx.font = '700 40px system-ui,sans-serif'; bx.fillText("SID'S BOARD", 36, 44);
+    if (owner && owner.summary) {                                   // only in Sid's own browser
+      const up = (owner.summary.change24Pct || 0) >= 0;
+      bx.textAlign = 'right'; bx.font = '700 30px system-ui,sans-serif'; bx.fillStyle = up ? '#7ee0b3' : '#ff8a8a';
+      bx.fillText(`$${Math.round(owner.summary.total).toLocaleString('en-CA')}  ${up ? '▲' : '▼'} ${Math.abs(owner.summary.change24Pct || 0).toFixed(1)}% 24h`, 992, 44); bx.textAlign = 'left';
+    }
+    /* top news */
+    const mine = owner && owner.headlines ? owner.headlines : [], seen = new Set(mine.map(n => n.title));
+    const list = [...mine.slice(0, 3), ...headlines.filter(n => !seen.has(n.title))].slice(0, 4);
+    bx.fillStyle = '#7e96a4'; bx.font = '700 20px system-ui,sans-serif'; bx.fillText('TOP NEWS', 36, 112);
+    if (!list.length) { bx.fillStyle = '#7e96a4'; bx.font = '400 26px system-ui,sans-serif'; bx.fillText('Loading headlines…', 36, 170); }
+    list.forEach((n, i) => {
+      const y = 136 + i * 84, hot = n.hot && n.hot.length;
+      bx.fillStyle = hot ? '#3a1820' : '#132836'; bx.beginPath(); bx.roundRect(28, y, 968, 74, 12); bx.fill();
+      bx.fillStyle = '#e9f2f6'; bx.font = '600 25px system-ui,sans-serif'; bx.fillText(fit(bx, n.title, 930), 46, y + 26);
+      bx.font = '500 18px system-ui,sans-serif'; bx.fillStyle = hot ? '#ff8a8a' : '#7e96a4';
+      bx.fillText(`${n.source} · ${ago(n.time)} ago${n.tags && n.tags.length ? '  ·  ' + n.tags.slice(0, 4).join(' ') : ''}`, 46, y + 54);
+    });
+    /* tickets */
+    const tk = jobs.map(j => status[j.id]).filter(Boolean).slice(0, 2), ty = 486;
+    bx.fillStyle = '#7e96a4'; bx.font = '700 20px system-ui,sans-serif'; bx.fillText('TICKETS', 36, ty);
+    bx.textAlign = 'right'; bx.fillStyle = '#ffc46b'; bx.fillText(badge.textContent.toUpperCase(), 992, ty); bx.textAlign = 'left';
+    if (!tk.length) { bx.fillStyle = '#7e96a4'; bx.font = '400 22px system-ui,sans-serif'; bx.fillText('No open tickets — talk to Sid to open one.', 36, ty + 44); }
+    tk.forEach((st, i) => {
+      const y = ty + 20 + i * 64; bx.fillStyle = '#132836'; bx.beginPath(); bx.roundRect(28, y, 968, 56, 12); bx.fill();
+      bx.fillStyle = '#9fd0ff'; bx.font = '700 22px ui-monospace,Consolas,monospace'; bx.fillText(st.id, 46, y + 22);
+      bx.fillStyle = '#e9f2f6'; bx.font = '500 20px system-ui,sans-serif'; bx.fillText(`${st.skill} · ${st.params.vm_size || ''} · ${st.params.region || ''}`, 220, y + 22);
+      bx.fillStyle = st.done ? '#7ee0b3' : '#ffc46b'; bx.textAlign = 'right'; bx.fillText(st.done ? 'DONE' : st.stageLabel, 978, y + 22); bx.textAlign = 'left';
+      bx.fillStyle = '#0b1219'; bx.fillRect(46, y + 40, 932, 8); bx.fillStyle = '#3fb98f'; bx.fillRect(46, y + 40, 932 * st.progress, 8);
     });
     btex.needsUpdate = true;
     if (monitor && jobs.some(k => status[k.id] && !status[k.id].done)) { monitor.draw = drawJob; monitor.live = true; }
   }
+
+  /* ---------- headlines for everyone; live portfolio + briefing only when the owner code is in this browser ---------- */
+  let headlines = [], owner = null, briefed = false;
+  async function loadNews() { try { const r = await fetch('/api/news'); if (r.ok) { headlines = (await r.json()).items || []; drawBoard(); } } catch (e) {} }
+  async function loadOwner(withText) {
+    if (!invite) return;
+    try {
+      const r = await fetch('/api/brief', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, text: !!withText }) });
+      if (!r.ok) { if (r.status === 403) owner = null; return; }
+      const d = await r.json(); owner = { ...(owner || {}), ...d, brief: d.brief || (owner && owner.brief) }; drawBoard();
+      if (withText && d.brief && !briefed) {
+        briefed = true; sub.textContent = 'Owner mode — your portfolio and news are loaded';
+        messages.push({ role: 'assistant', content: d.brief }); addMsg('assistant', d.brief);
+        const s0 = d.summary, lead = d.pokes && d.pokes.length ? 'Heads up — ' + d.pokes[0] : `Portfolio $${Math.round(s0.total).toLocaleString('en-CA')}, ${(s0.change24Pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(s0.change24Pct || 0).toFixed(1)}% today. Click me for the briefing.`;
+        const tell = () => { if (avatar.ready) av('say', lead.length > 150 ? lead.slice(0, 147) + '…' : lead, 9); else setTimeout(tell, 1500); }; setTimeout(tell, 4500);
+      }
+    } catch (e) {}
+  }
+  loadNews(); setInterval(loadNews, 10 * 60e3);
+  loadOwner(true); setInterval(() => loadOwner(false), 5 * 60e3);
 
   /* ---------- open / close ---------- */
   function setOpen(v) {

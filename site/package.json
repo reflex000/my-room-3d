@@ -1,0 +1,5 @@
+{
+  "name": "my-room-3d-site",
+  "private": true,
+  "dependencies": { "yaml": "^2.5.1" }
+}
