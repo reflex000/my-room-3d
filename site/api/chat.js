@@ -6,6 +6,7 @@
 const { MODE, roleFor, sessionOk, rateLimited, readSkills, VALIDATORS, signJob, verifyJob, newJob, jobStatus } = require('./_lib.js');
 const { loadBrain, hasBrain } = require('./_brain.js');
 const { ownerContext, OWNER_RULES } = require('./_owner.js');
+const { isPersonal } = require('./_personal.js');
 
 const MODELS = (process.env.OPENAI_MODEL ? [process.env.OPENAI_MODEL] : []).concat(['gpt-4.1-mini', 'gpt-4o-mini', 'gpt-5-mini']);
 const ACTIONS = ['wave', 'nod', 'no', 'think', 'thumbs', 'laugh', 'shrug', 'drink', 'stretch'];
@@ -87,9 +88,7 @@ module.exports = async (req, res) => {
 
   /* locked owner asking about his own money/plans: ask for the passphrase straight away (deterministic, no model call) */
   const lastUser = history[history.length - 1].content;
-  if (role === 'owner' && !sessionOk(body.session) &&
-      (/\b(show|put)\b.*\bboard\b/i.test(lastUser) ||
-       (/\b(my|mine|mera|meri|mere|i hold|i own|i have)\b/i.test(lastUser) && /\b(portfolio|holdings?|btc|bitcoin|eth|crypto|coins?|stocks?|shares?|positions?|gains?|loss(es)?|profit|money|net ?worth|trigger|target|goal|loan|mortgage|savings|cash|account|balance|p&l|pnl)\b/i.test(lastUser)))) {
+  if (role === 'owner' && !sessionOk(body.session) && isPersonal(lastUser)) {
     res.status(200).json({ reply: "That's personal — say your passphrase and I'll pull it up.", actions: ['ask_passphrase'], job: null, mode: MODE, role });
     return;
   }
