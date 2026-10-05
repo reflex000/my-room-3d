@@ -94,13 +94,19 @@ HOW SID WRITES:
 ${voice}
 
 Return JSON:
-{"headline": "one sentence, max 24 words: what is moving markets right now",
+{"headline": "one plain sentence, max 22 words, the way you would tell a friend what is moving markets right now; name the actual driver and match the PRICES above",
  "bullets": ["up to 3 short bullets, each naming its outlet"],
- "impact": [{"id": "N3", "sentiment": "positive|negative|mixed", "severity": 1-10, "why": "one sentence: why this matters for markets", "tickers": ["up to 3 well-known symbols it directly touches, e.g. NVDA, TSLA, BTC; empty if none"]}],
- "leaders": [{"id": "L2", "move": "one short sentence: what the leader said or decided", "sectors": ["up to 2 sectors"], "direction": "positive|negative|mixed", "why": "one sentence: which assets it touches and how", "tickers": ["up to 2 US or Canada listed symbols clearly tied to it; empty if unsure"]}],
+ "impact": [{"id": "N3", "sentiment": "positive|negative|mixed", "severity": 1-10, "why": "one sentence: why this matters for markets", "tickers": ["up to 3 symbols it directly touches: the company or coin named, or a liquid ETF proxy for the sector (TLT long Treasuries, XLE energy, XLF banks, GLD gold, SMH chips, EWC Canada, INDA India); empty if none fits"]}],
+ "leaders": [{"id": "L2", "move": "one short sentence: what the leader said or decided", "sectors": ["up to 2 sectors"], "direction": "positive|negative|mixed", "why": "one sentence: which assets it touches and how", "tickers": ["1 or 2 US or Canada listed symbols tied to it: the company named, or a liquid ETF proxy for the sector or country (TLT, XLE, XLF, GLD, SMH, CARZ autos, EWC Canada, INDA India, EWY South Korea); empty only if nothing fits"]}],
  "note": {"title": "max 9 words", "paragraphs": ["3 short paragraphs, 130 to 190 words in total"]}}
-"impact": the 8 most market-moving NEWS items, most severe first. "leaders": up to 6 LEADER HEADLINES that are real statements or decisions with market consequences; skip gossip, polls and opinion pieces; at most 2 per leader.
-"note": written in the first person as Sid, in his voice, about what he is watching today and how he thinks about it (risk, time horizon, what he would want to understand first). It is a point of view, not advice.` },
+"impact": the 8 most market-moving NEWS items, most severe first. "leaders": up to 6 LEADER HEADLINES where the headline itself reports something that leader (or their government or central bank) said, signed, announced or decided, with market consequences. Skip commentary and opinion pieces, polls, gossip, and stories that only mention the leader in passing. At most 2 per leader. "move" must stay faithful to the headline and add nothing.
+"note": a short personal blog post by Sid, first person singular ("I"), in his voice. Not an analyst report.
+- Open with the one thing that caught his eye today and why, in plain words.
+- Say how he reads it: what the real risk is, how far the damage could spread, over what time horizon. A comparison from running production systems (alert noise versus a real incident, a single point of failure, capacity headroom) is welcome once if it fits naturally.
+- End with what he is watching next and what would change his mind.
+- Contractions, short sentences, 2 to 4 sentences per paragraph. No report words such as amid, landscape, mosaic, underscores, highlights, signals, bellwether, headwinds.
+- The title is something a person would say out loud: specific, no colon.
+It is a point of view, not advice.` },
       ],
     }),
   });
@@ -114,9 +120,10 @@ Return JSON:
     impact.push({ title: n.title, source: n.source, link: n.link, time: n.time, theme: n.theme, sentiment: SENT.includes(x.sentiment) ? x.sentiment : 'mixed',
       severity: Math.max(1, Math.min(10, Math.round(+x.severity || 5))), why: clip(x.why, 240), tickers: await chips(x.tickers, 3) });
   }
-  const outLeaders = [], seenL = new Set();
+  const outLeaders = [], seenL = new Set(), perLeader = {};
   for (const x of (Array.isArray(j.leaders) ? j.leaders : []).slice(0, 6)) {
     const n = byId(leaders, 'L', x.id); if (!n || seenL.has(n.title)) continue; seenL.add(n.title);
+    perLeader[n.leader] = (perLeader[n.leader] || 0) + 1; if (perLeader[n.leader] > 2) continue;
     outLeaders.push({ leader: n.leader, title: n.title, source: n.source, link: n.link, time: n.time, move: clip(x.move, 200), sectors: (Array.isArray(x.sectors) ? x.sectors : []).slice(0, 2).map(s => clip(s, 40)),
       direction: SENT.includes(x.direction) ? x.direction : 'mixed', why: clip(x.why, 260), tickers: await chips(x.tickers, 2) });
   }
