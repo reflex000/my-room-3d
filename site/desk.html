@@ -24,6 +24,9 @@
   nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs a { flex: none; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: .3px; text-decoration: none; color: var(--mute); background: rgba(255,255,255,.04); }
   nav.tabs a:hover { color: var(--ink); }
+  nav.tabs a.on { color: #04121d; background: var(--blue); }
+  #themes { padding-bottom: 12px; } #themes a { text-transform: capitalize; }
+  .btn.more { justify-self: start; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
   section { padding: 34px 0 6px; scroll-margin-top: 96px; }
   .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2.4px; text-transform: uppercase; color: var(--blue); margin: 0 0 6px; }
   h1 { font: 700 clamp(26px, 5vw, 40px)/1.18 var(--serif); margin: 0 0 14px; text-wrap: balance; }
@@ -105,7 +108,8 @@
 
   <section id="news">
     <h2>News &amp; impact</h2>
-    <p class="sub">The headlines most likely to move markets, tagged with why they matter.</p>
+    <p class="sub">Every headline on the wall board, most market-moving first, tagged with why it matters.</p>
+    <nav class="tabs" id="themes" aria-label="Filter by theme"></nav>
     <div class="list" id="impact"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
@@ -160,6 +164,7 @@
     return row;
   };
 
+  let theme = 'all', expanded = false;
   function render(d) {
     $('today').textContent = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver', weekday: 'long', month: 'long', day: 'numeric' }) + ' · Vancouver';
     $('headline').textContent = d.headline || 'Here is what the market is looking at today.';
@@ -185,16 +190,21 @@
     }
 
     const imp = $('impact'); imp.replaceChildren();
-    for (const n of d.impact || []) {
+    const allNews = d.impact || [], themes = [...new Set(allNews.map(n => n.theme).filter(Boolean))];
+    if (theme !== 'all' && !themes.includes(theme)) theme = 'all';
+    const pills = $('themes'); pills.replaceChildren(...['all', ...themes].map(t => { const a = el('a', t === theme ? 'on' : '', t === 'all' ? 'All (' + allNews.length + ')' : t); a.href = '#news'; a.onclick = (ev) => { ev.preventDefault(); theme = t; expanded = false; render(d); }; return a; }));
+    const pool = theme === 'all' ? allNews : allNews.filter(n => n.theme === theme), shown = theme === 'all' && !expanded ? pool.slice(0, 8) : pool;
+    for (const n of shown) {
       const c = el('article', 'card item'), meta = el('div', 'meta');
       if (n.sentiment) meta.appendChild(el('span', 'tag ' + n.sentiment, n.sentiment));
       if (n.severity) meta.appendChild(el('span', '', 'Severity ' + n.severity + '/10'));
-      meta.append(el('span', '', ago(n.time)), el('span', '', n.source || ''));
+      meta.append(el('span', '', n.theme || ''), el('span', '', ago(n.time)), el('span', '', n.source || ''));
       c.append(meta, link('t', n.title, n.link)); if (n.why) c.appendChild(el('p', '', n.why));
       const row = chipRow('Touches', n.tickers, 'changePct'); if (row) c.appendChild(row);
       imp.appendChild(c);
     }
-    if (!(d.impact || []).length) imp.appendChild(el('p', 'sub', 'No headlines right now — check back in a bit.'));
+    if (shown.length < pool.length) { const more = el('button', 'btn more', 'Show all ' + pool.length + ' headlines'); more.type = 'button'; more.onclick = () => { expanded = true; render(d); }; imp.appendChild(more); }
+    if (!allNews.length) imp.appendChild(el('p', 'sub', 'No headlines right now — check back in a bit.'));
 
     if ((d.leaders || []).length) {
       const L = $('leaderList'); L.replaceChildren();
