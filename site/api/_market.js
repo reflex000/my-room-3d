@@ -178,4 +178,4 @@ function relevantNews(items, portfolio, watchlist) {
   }).filter(n => n.tags.length).sort((a, b) => b.score - a.score || (b.time || 0) - (a.time || 0));
 }
 
-module.exports = { snapshot, charts, news, relevantNews, mixThemes, reddit };
+module.exports = { snapshot, charts, news, relevantNews, mixThemes, reddit, cached, getJson, getFeed, parseFeed };

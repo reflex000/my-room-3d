@@ -727,7 +727,8 @@ const LINKS = [
   { test: n => n.startsWith('monitor_main') || n === 'screen_main', label: 'LG 32" Smart Monitor — view product', url: 'https://www.lg.com/ca_en/monitors/smart-monitors/32u720sa-w/' },
   { test: n => n.startsWith('laptop_hp'), label: 'HP Elite x360 1040 G11 — view product', url: 'https://www.hp.com/us-en/shop/pdp/hp-elite-x360-1040-14-inch-g11-2-in-1-notebook-pc-wolf-pro-security-edition-p-cp3m0ua-aba-1' },
   { test: n => n.startsWith('loft_bed') || n.startsWith('bed_') || n.startsWith('ladder_'), label: 'IKEA VITVAL Loft Bed — view product', url: 'https://www.ikea.com/ca/en/p/vitval-loft-bed-frame-white-light-gray-70411239/' },
-  { test: n => n.startsWith('tickets_board'), label: 'Ops board — open the SRE desk', action: () => window.__sre && window.__sre.open() },
+  { test: n => n === 'sre_tickets_link', label: 'SRE tickets — open the SRE desk', action: () => window.__sre && window.__sre.open() },
+  { test: n => n.startsWith('tickets_board'), label: "Sid's board — open the market desk", url: '/desk' },
   { test: n => n.startsWith('avatar'), label: "That's me 👋 — click to talk", action: () => (window.__sre ? window.__sre.open() : avatar.command('hi')) },
   { test: n => n.startsWith('curtain'), label: 'Click to open / close the curtains', action: () => window.__toggleCurtains() },
 ];

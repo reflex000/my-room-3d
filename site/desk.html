@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sid's Desk — markets, news and what I'm watching</title>
+<meta name="description" content="A daily market page: what is moving, news tagged with market impact, a leader tracker and a short desk note.">
+<style>
+  :root { --bg: #070b11; --panel: #0d1622; --line: rgba(255,255,255,.08); --ink: #eef3f7; --mute: #8fa3b3; --dim: #5f7383;
+          --blue: #4aa8e0; --green: #5fd3a0; --red: #ff7b7b; --amber: #ffc46b; --serif: Georgia, 'Times New Roman', serif; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  header.top { position: sticky; top: 0; z-index: 5; background: rgba(7,11,17,.88); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+  .brand { font: 700 22px/1 var(--serif); letter-spacing: .2px; text-decoration: none; margin-right: auto; }
+  .brand small { display: block; font: 600 10px/1.6 system-ui, sans-serif; letter-spacing: 2.2px; color: var(--dim); text-transform: uppercase; }
+  .btn { display: inline-block; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .btn:hover { border-color: rgba(255,255,255,.25); }
+  .btn.go { background: var(--blue); border-color: var(--blue); color: #04121d; }
+  nav.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 10px; scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs a { flex: none; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: .3px; text-decoration: none; color: var(--mute); background: rgba(255,255,255,.04); }
+  nav.tabs a:hover { color: var(--ink); }
+  section { padding: 34px 0 6px; scroll-margin-top: 96px; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2.4px; text-transform: uppercase; color: var(--blue); margin: 0 0 6px; }
+  h1 { font: 700 clamp(26px, 5vw, 40px)/1.18 var(--serif); margin: 0 0 14px; text-wrap: balance; }
+  h2 { font: 700 24px/1.2 var(--serif); margin: 0 0 4px; }
+  .sub { color: var(--mute); font-size: 14px; margin: 0 0 16px; }
+  ul.points { margin: 0 0 18px; padding: 0; list-style: none; }
+  ul.points li { position: relative; padding: 5px 0 5px 18px; color: #c9d6df; }
+  ul.points li::before { content: ''; position: absolute; left: 2px; top: 15px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+  .moods { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .mood b { display: block; font-size: 11px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--dim); }
+  .mood span { font: 700 20px/1.4 var(--serif); text-transform: capitalize; }
+  .mood p { margin: 4px 0 0; color: var(--mute); font-size: 14px; }
+  .tiles { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .tile { border-radius: 12px; padding: 12px; border: 1px solid var(--line); background: var(--panel); min-height: 112px; display: flex; flex-direction: column; }
+  .tile .s { font-weight: 800; letter-spacing: .4px; font-size: 14px; }
+  .tile .n { color: var(--mute); font-size: 12px; }
+  .tile .p { margin-top: auto; font-size: 13px; color: #c9d6df; font-variant-numeric: tabular-nums; }
+  .tile .c { font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .tile svg { width: 100%; height: 26px; margin: 4px 0 2px; }
+  .up { color: var(--green); } .down { color: var(--red); } .flat { color: var(--mute); }
+  .note { border-left: 3px solid var(--blue); }
+  .note h3 { font: 700 22px/1.25 var(--serif); margin: 0 0 10px; }
+  .note p { margin: 0 0 12px; color: #d5e0e8; max-width: 68ch; }
+  .fine { font-size: 12px; color: var(--dim); margin: 0; }
+  .list { display: grid; gap: 10px; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+  .tag { padding: 3px 8px; border-radius: 6px; border: 1px solid currentColor; }
+  .tag.positive { color: var(--green); background: rgba(95,211,160,.08); } .tag.negative { color: var(--red); background: rgba(255,123,123,.08); } .tag.mixed { color: var(--amber); background: rgba(255,196,107,.08); }
+  .tag.who { color: var(--blue); background: rgba(74,168,224,.1); }
+  .item a.t { display: block; font-weight: 700; font-size: 17px; line-height: 1.35; text-decoration: none; }
+  .item a.t:hover { text-decoration: underline; }
+  .item p { margin: 6px 0 0; color: var(--mute); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+  .chips > b { font-size: 10px; letter-spacing: 1.5px; color: var(--dim); text-transform: uppercase; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 6px; background: rgba(74,168,224,.1); border: 1px solid rgba(74,168,224,.3); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .chip svg { width: 44px; height: 14px; }
+  .two { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; background: linear-gradient(135deg, #10263a, #0d1622); }
+  .cta div { flex: 1 1 260px; } .cta h3 { font: 700 20px/1.3 var(--serif); margin: 0 0 4px; } .cta p { margin: 0; color: var(--mute); font-size: 14px; }
+  footer { padding: 30px 0 44px; color: var(--dim); font-size: 12px; }
+  .skel { height: 96px; border-radius: 14px; background: linear-gradient(90deg, #0d1622 25%, #132030 50%, #0d1622 75%); background-size: 200% 100%; animation: sh 1.4s linear infinite; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel { animation: none; } html { scroll-behavior: auto; } }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="bar">
+    <a class="brand" href="#overview">Sid's Desk<small>Markets · news · what I'm watching</small></a>
+    <a class="btn" href="/">← The room</a>
+    <a class="btn go" href="/#sre">SRE desk</a>
+  </div>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#overview">Overview</a><a href="#markets">Markets</a><a href="#note">Desk note</a><a href="#news">News &amp; impact</a><a href="#leaders">Leader tracker</a><a href="#watching">Watching</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+  <section id="overview">
+    <p class="eyebrow" id="today">Today</p>
+    <h1 id="headline">Building today's desk…</h1>
+    <ul class="points" id="bullets"></ul>
+    <div class="moods" id="moods"><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <section id="markets">
+    <h2>Markets</h2>
+    <p class="sub" id="pricesAt">Day change, with the last month as a sparkline.</p>
+    <div class="tiles" id="tiles"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <section id="note" hidden>
+    <h2>Desk note</h2>
+    <p class="sub">What I'm watching today and how I'm thinking about it.</p>
+    <article class="card note" id="noteCard"></article>
+  </section>
+
+  <section id="news">
+    <h2>News &amp; impact</h2>
+    <p class="sub">The headlines most likely to move markets, tagged with why they matter.</p>
+    <div class="list" id="impact"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <section id="leaders" hidden>
+    <h2>Leader tracker</h2>
+    <p class="sub">What leaders said or decided, and the assets it touches. Moves shown are the last five trading days, not a claim of cause.</p>
+    <div class="two" id="leaderList"></div>
+  </section>
+
+  <section id="watching" hidden>
+    <h2>Watching</h2>
+    <p class="sub">Things worth keeping an eye on this week.</p>
+    <div class="two" id="watchList"></div>
+  </section>
+
+  <section>
+    <div class="card cta">
+      <div><h3>Need a hand with cloud infrastructure?</h3><p>My day job is keeping systems reliable. Walk into the room and tell me what you need — I'll take it from there.</p></div>
+      <a class="btn go" href="/#sre">Talk to Sid</a>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>This page is my own reading of public news and prices. It is not financial advice and not a recommendation to buy or sell anything. The desk note and the impact tags are drafted by my desk AI in my voice and can be wrong — check the linked sources. Prices are delayed.</p>
+  <p id="stamp"></p>
+</footer>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  /* every piece of text goes in through textContent; links are only ever http(s) */
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const link = (cls, text, url) => { const a = el('a', cls, text); if (/^https?:\/\//i.test(url || '')) { a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; } return a; };
+  const ago = (t) => { if (!t) return ''; const h = (Date.now() - t) / 3600e3; return h < 1 ? Math.max(1, Math.round(h * 60)) + 'm ago' : h < 24 ? Math.round(h) + 'h ago' : Math.round(h / 24) + 'd ago'; };
+  const pct = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2) + '%';
+  const dir = (v) => Math.abs(v) < 0.05 ? 'flat' : v > 0 ? 'up' : 'down';
+  const money = (v, cur) => new Intl.NumberFormat('en-CA', { maximumFractionDigits: v >= 1000 ? 0 : 2, minimumFractionDigits: v >= 1000 ? 0 : 2 }).format(v) + (cur ? ' ' + cur : '');
+  function spark(points, cls) {
+    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 100 28'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+    if (!points || points.length < 2) return svg;
+    const lo = Math.min(...points), hi = Math.max(...points), span = hi - lo || 1;
+    const p = document.createElementNS(NS, 'polyline');
+    p.setAttribute('points', points.map((v, i) => (i / (points.length - 1) * 100).toFixed(1) + ',' + (25 - (v - lo) / span * 22).toFixed(1)).join(' '));
+    p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '1.6'); p.setAttribute('vector-effect', 'non-scaling-stroke');
+    svg.appendChild(p); svg.classList.add(cls); return svg;
+  }
+  const chipRow = (label, tickers, key) => {
+    if (!tickers || !tickers.length) return null;
+    const row = el('div', 'chips'); row.appendChild(el('b', '', label));
+    for (const t of tickers) { const c = el('span', 'chip'); c.appendChild(el('span', '', t.symbol)); if (key === 'change5dPct') c.appendChild(spark(t.spark, dir(t[key]))); c.appendChild(el('span', dir(t[key]), pct(t[key]))); row.appendChild(c); }
+    return row;
+  };
+
+  function render(d) {
+    $('today').textContent = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver', weekday: 'long', month: 'long', day: 'numeric' }) + ' · Vancouver';
+    $('headline').textContent = d.headline || 'Here is what the market is looking at today.';
+    const bl = $('bullets'); bl.replaceChildren(...(d.bullets || []).map(b => el('li', '', b)));
+    const moods = $('moods'); moods.replaceChildren();
+    if (d.mood) for (const [name, m, why] of [['Crypto mood', d.mood.crypto, d.mood.cryptoWhy], ['Markets mood', d.mood.markets, d.mood.marketsWhy]]) {
+      if (!m) continue; const c = el('div', 'card mood'); c.append(el('b', '', name), el('span', '', m), el('p', '', why || '')); moods.appendChild(c);
+    }
+
+    const tiles = $('tiles'); tiles.replaceChildren();
+    for (const t of d.tiles || []) {
+      const k = dir(t.changePct), heat = Math.min(0.26, Math.abs(t.changePct) * 0.06), box = el('div', 'tile');
+      if (k !== 'flat') { box.style.background = `rgba(${k === 'up' ? '95,211,160' : '255,123,123'},${heat.toFixed(3)})`; }
+      box.append(el('span', 's', t.symbol), el('span', 'n', t.name), spark(t.spark, k), el('span', 'c ' + k, pct(t.changePct)), el('span', 'p', money(t.price, t.currency)));
+      tiles.appendChild(box);
+    }
+    if (!(d.tiles || []).length) tiles.appendChild(el('p', 'sub', 'Prices are unavailable right now.'));
+    if (d.pricesAt) $('pricesAt').textContent = 'Day change, with the last month as a sparkline. Updated ' + ago(d.pricesAt) + '.';
+
+    if (d.note) {
+      const n = $('noteCard'); n.replaceChildren(el('h3', '', d.note.title || "Today's note"), ...d.note.paragraphs.map(p => el('p', '', p)), el('p', 'fine', 'Drafted by my desk AI in my voice from today\'s public news · ' + ago(d.generatedAt) + ' · a point of view, not advice'));
+      $('note').hidden = false;
+    }
+
+    const imp = $('impact'); imp.replaceChildren();
+    for (const n of d.impact || []) {
+      const c = el('article', 'card item'), meta = el('div', 'meta');
+      if (n.sentiment) meta.appendChild(el('span', 'tag ' + n.sentiment, n.sentiment));
+      if (n.severity) meta.appendChild(el('span', '', 'Severity ' + n.severity + '/10'));
+      meta.append(el('span', '', ago(n.time)), el('span', '', n.source || ''));
+      c.append(meta, link('t', n.title, n.link)); if (n.why) c.appendChild(el('p', '', n.why));
+      const row = chipRow('Touches', n.tickers, 'changePct'); if (row) c.appendChild(row);
+      imp.appendChild(c);
+    }
+    if (!(d.impact || []).length) imp.appendChild(el('p', 'sub', 'No headlines right now — check back in a bit.'));
+
+    if ((d.leaders || []).length) {
+      const L = $('leaderList'); L.replaceChildren();
+      for (const n of d.leaders) {
+        const c = el('article', 'card item'), meta = el('div', 'meta');
+        meta.append(el('span', 'tag who', n.leader), el('span', 'tag ' + n.direction, n.direction), ...n.sectors.map(s => el('span', '', s)));
+        c.append(meta, link('t', n.move || n.title, n.link)); if (n.why) c.appendChild(el('p', '', n.why));
+        c.appendChild(el('p', 'fine', (n.source || '') + ' · ' + ago(n.time)));
+        const row = chipRow('5-day move', n.tickers, 'change5dPct'); if (row) c.appendChild(row);
+        L.appendChild(c);
+      }
+      $('leaders').hidden = false;
+    }
+
+    const W = $('watchList'); W.replaceChildren();
+    if (d.mood && d.mood.watch && d.mood.watch.length) { const c = el('div', 'card'), ul = el('ul', 'points'); ul.style.margin = '0'; ul.append(...d.mood.watch.map(w => el('li', '', w))); c.appendChild(ul); W.appendChild(c); }
+    if (d.mood && d.mood.reddit) { const c = el('div', 'card mood'); c.append(el('b', '', 'Reddit pulse — sentiment, not fact'), el('p', '', d.mood.reddit)); W.appendChild(c); }
+    $('watching').hidden = !W.children.length;
+    $('stamp').textContent = d.generatedAt ? 'Analysis refreshed ' + ago(d.generatedAt) + '.' : '';
+  }
+
+  async function load(tries) {
+    try { const r = await fetch('/api/desk'); if (!r.ok) throw new Error(r.status); render(await r.json()); }
+    catch (e) { if (tries > 0) return setTimeout(() => load(tries - 1), 4000); $('headline').textContent = 'The desk is offline for a moment — try again shortly.'; $('moods').replaceChildren(); $('tiles').replaceChildren(); $('impact').replaceChildren(); }
+  }
+  load(2);
+  setInterval(() => { if (!document.hidden) load(0); }, 5 * 60e3);
+})();
+</script>
+</body>
+</html>

@@ -244,6 +244,9 @@ export function initSRE({ T, stage, avatar, screens }) {
   gg.addColorStop(0, 'rgba(90,150,255,0.55)'); gg.addColorStop(0.6, 'rgba(60,110,230,0.18)'); gg.addColorStop(1, 'rgba(40,80,200,0)'); gx.fillStyle = gg; gx.fillRect(0, 0, 256, 256);
   const glow = new T.Mesh(new T.PlaneGeometry(BW_ * 1.9, BH_ * 2.1), new T.MeshBasicMaterial({ map: new T.CanvasTexture(gc), transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.55 }));
   glow.name = 'tickets_board_glow'; glow.position.z = -0.0225; glow.raycast = () => {}; board.add(glow);
+  /* the tickets row at the bottom of the board is its own link (SRE desk); the rest of the board opens the market page */
+  const strip = new T.Mesh(new T.PlaneGeometry(BW_, BH_ * 0.15), new T.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+  strip.name = 'sre_tickets_link'; strip.position.set(0, -BH_ / 2 + BH_ * 0.075, 0.003); board.add(strip);
   board.position.set(BOARD.x, BOARD.y, BOARD.z); avatar.group.add(board);
 
   const fit = (ctx, text, max) => { if (ctx.measureText(text).width <= max) return text; let t = text; while (t.length > 4 && ctx.measureText(t + '…').width > max) t = t.slice(0, -1); return t.trimEnd() + '…'; };
@@ -275,6 +278,7 @@ export function initSRE({ T, stage, avatar, screens }) {
       bx.font = '600 21px system-ui,sans-serif'; bx.fillStyle = '#9fb3c1';
       bx.fillText(`Stocks ${k((owner.summary.stocks || {}).value || 0)} · all-time ${(cr.allTimeReturn || 0) >= 0 ? '+' : '−'}$${Math.round(Math.abs(cr.allTimeReturn || 0)).toLocaleString('en-CA')}`, W - 48, 80); bx.textAlign = 'left';
     }
+    else { bx.textAlign = 'right'; bx.font = '700 20px system-ui,sans-serif'; bx.fillStyle = '#8fc9ef'; bx.fillText('MARKET DESK  ↗', W - 48, 58); bx.textAlign = 'left'; }
     bx.fillStyle = 'rgba(255,255,255,0.08)'; bx.fillRect(48, 106, W - 96, 2);
     /* featured headline (carousel) */
     const n = list[slideIdx];
@@ -300,9 +304,10 @@ export function initSRE({ T, stage, avatar, screens }) {
     if (next) { bx.font = '600 24px system-ui,sans-serif'; bx.fillStyle = '#cfdbe3'; bx.fillText(fit(bx, next.title + '  —  ' + next.source, W - 300), 190, 595); }
     /* tickets */
     const open = jobs.map(j => status[j.id]).filter(Boolean), active = open.filter(x => !x.done);
-    bx.font = '700 20px system-ui,sans-serif'; bx.fillStyle = '#7e96a4'; bx.fillText('TICKETS', 48, 668);
+    bx.fillStyle = 'rgba(126,224,179,0.07)'; bx.beginPath(); bx.roundRect(28, 640, W - 56, 58, 12); bx.fill();
+    bx.font = '700 20px system-ui,sans-serif'; bx.fillStyle = '#7ee0b3'; bx.fillText('SRE TICKETS ↗', 48, 668);
     bx.font = '600 22px system-ui,sans-serif'; bx.fillStyle = active.length ? '#ffc46b' : '#9fb3c1';
-    bx.fillText(active.length ? `${active[0].id} · ${active[0].stageLabel}${active.length > 1 ? `  (+${active.length - 1} more)` : ''}` : (open.length ? `${open.length} done — all clear` : 'No open tickets — talk to Sid to open one'), 170, 668);
+    bx.fillText(active.length ? `${active[0].id} · ${active[0].stageLabel}${active.length > 1 ? `  (+${active.length - 1} more)` : ''}` : (open.length ? `${open.length} done — all clear` : 'No open tickets — talk to Sid to open one'), 218, 668);
     bx.textAlign = 'right'; bx.fillStyle = '#ffc46b'; bx.font = '700 18px system-ui,sans-serif'; bx.fillText(badge.textContent.toUpperCase(), W - 48, 668); bx.textAlign = 'left';
     btex.needsUpdate = true;
     if (monitor && jobs.some(k => status[k.id] && !status[k.id].done)) { monitor.draw = drawJob; monitor.live = true; }
@@ -366,5 +371,6 @@ export function initSRE({ T, stage, avatar, screens }) {
   renderFoot(); drawBoard();
 
   const api = { open: () => setOpen(true), close: () => setOpen(false), send };
+  if (location.hash === '#sre') setOpen(true);   /* links from the market page */
   window.__sre = api; return api;
 }
