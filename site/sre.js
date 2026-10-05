@@ -234,7 +234,7 @@ export function initSRE({ T, stage, avatar, screens }) {
   /* ---------- Sid's board: a wall-mounted screen on the back wall, right of the desk (child of the avatar group so it
      survives the baked-GLB swap). Back wall face z = -1.76; right wall / pillar face x = 2.46. ---------- */
   const BW_ = 1.16, BH_ = 0.6525, BOARD = { x: 1.83, y: 1.80, z: -1.743 };
-  const bc = document.createElement('canvas'); bc.width = 1280; bc.height = 720; const bx = bc.getContext('2d');
+  const bc = document.createElement('canvas'); bc.width = 2560; bc.height = 1440;   /* 2x for crisp text; drawBoard keeps 1280x720 coords */ const bx = bc.getContext('2d');
   const btex = new T.CanvasTexture(bc); btex.colorSpace = T.SRGBColorSpace; btex.anisotropy = 8;
   const board = new T.Mesh(new T.PlaneGeometry(BW_, BH_), new T.MeshBasicMaterial({ map: btex, toneMapped: false })); board.name = 'tickets_board';
   const bezelMat = new T.MeshStandardMaterial({ color: 0x08090c, roughness: 0.35, metalness: 0.3 });
@@ -256,6 +256,7 @@ export function initSRE({ T, stage, avatar, screens }) {
     return [...mine.slice(0, 4), ...headlines.filter(n => !seen.has(n.title))].slice(0, 8);
   }
   function drawBoard() {
+    bx.setTransform(2, 0, 0, 2, 0, 0);
     const W = 1280, H = 720, now = performance.now(), list = boardItems();
     if (list.length !== lastList.length || (list[0] && lastList[0] && list[0].title !== lastList[0].title)) { lastList = list; if (slideIdx >= list.length) slideIdx = 0; }
     if (now - slideStart > SLIDE && list.length > 1) { slideStart = now; slideIdx = (slideIdx + 1) % list.length; }
@@ -264,8 +265,9 @@ export function initSRE({ T, stage, avatar, screens }) {
     bx.fillStyle = g0; bx.fillRect(0, 0, W, H); bx.textBaseline = 'middle'; bx.textAlign = 'left';
     /* header */
     bx.fillStyle = '#e9f2f6'; bx.font = '800 44px system-ui,sans-serif'; bx.fillText("SID'S BOARD", 48, 56);
+    const titleW = bx.measureText("SID'S BOARD").width;
     const clock = new Date().toLocaleTimeString('en-CA', { timeZone: 'America/Vancouver', hour: 'numeric', minute: '2-digit' });
-    bx.fillStyle = '#7e96a4'; bx.font = '600 24px system-ui,sans-serif'; bx.fillText('VANCOUVER · ' + clock.toUpperCase(), 330, 58);
+    bx.fillStyle = '#7e96a4'; bx.font = '600 24px system-ui,sans-serif'; bx.fillText('VANCOUVER · ' + clock.toUpperCase(), 48 + titleW + 22, 58);
     if (unlocked() && owner && owner.summary) {
       const cr = owner.summary.crypto || {}, up = (cr.change24Pct || 0) >= 0, k = (v) => '$' + (v / 1000).toFixed(1) + 'k';
       bx.textAlign = 'right'; bx.font = '800 34px system-ui,sans-serif'; bx.fillStyle = up ? '#7ee0b3' : '#ff8a8a';

@@ -247,7 +247,7 @@ for i, (m, px, py) in enumerate(((TEAL, -0.026, 0.036), (YELLOW, 0.026, 0.036), 
     box(f'pup_panel_{i+1}', 0.05, 0.068, 0.002, m, px, py, 0.019, bevel=0, parent=pup)
 for i in range(9):
     torus(f'pup_spiral_{i+1}', 0.006, 0.0012, STEEL, -0.048 + i * 0.012, 0.077, 0.014, rot=(0, radians(90), 0), parent=pup)
-tn = group('notebook_teal', DX + 0.62, DY - 0.15, TOP, rz=-0.1)
+tn = group('notebook_teal', DX - 0.55, DY - 0.18, TOP, rz=-0.1)
 box('teal_nb_pages', 0.2, 0.27, 0.022, PAPER, 0, 0, 0.011, bevel=0.004, parent=tn)
 box('teal_nb_cover', 0.19, 0.26, 0.003, TEAL, 0, 0, 0.0235, bevel=0, parent=tn)
 for i in range(14):
@@ -281,13 +281,41 @@ for i, sg in enumerate((-1, 1)):
 torus('clock_handle', 0.02, 0.003, CHROME, 0, 0, 0.11, rot=(radians(90), 0, 0), parent=ck)
 cyl('spray_can', 0.028, 0.15, NAVY, DX + 0.16, DY + 0.12, TOP + 0.075, verts=24)
 cyl('spray_cap', 0.026, 0.02, BLACK, DX + 0.16, DY + 0.12, TOP + 0.16, verts=24)
-box('bike_light', 0.03, 0.07, 0.02, BLACK, DX + 0.56, DY - 0.02, TOP + 0.01, rot=(0, 0, 0.6), bevel=0.006)
-box('bike_light_lens', 0.028, 0.02, 0.012, RED, DX + 0.575, DY - 0.048, TOP + 0.012, rot=(0, 0, 0.6), bevel=0)
+box('bike_light', 0.03, 0.07, 0.02, BLACK, DX + 0.5, DY - 0.1, TOP + 0.01, rot=(0, 0, 0.6), bevel=0.006)
+box('bike_light_lens', 0.028, 0.02, 0.012, RED, DX + 0.515, DY - 0.128, TOP + 0.012, rot=(0, 0, 0.6), bevel=0)
 cyl('cup_holder', 0.04, 0.09, BLACK, DX - 0.52, DY + 0.08, TOP + 0.045, verts=24)
 for i, c in enumerate(('e8bf34', '3fa3a8', 'e2557f', 'f2f1ee')):
     cyl(f'pen_{i+1}', 0.005, 0.15, mat(f'pen_{i+1}', c, 0.5), DX - 0.52 + (i - 1.5) * 0.012, DY + 0.08, TOP + 0.11,
         rot=(0.1 * (i - 1.5), 0.12 * (i - 1.5), 0), verts=8, bevel=0)
 box('card_red', 0.1, 0.14, 0.006, RED, DX - 0.02, DY + 0.02, TOP + 0.003, rot=(0, 0, -0.3), bevel=0.003)
+# yellow plush figure on the desk (Blender local: -y = front, z = up)
+HOMER = {'skin': mat('homer_skin', 'f5c832', 0.85), 'jeans': mat('homer_jeans', '4a8fd6', 0.85), 'shirt': mat('homer_shirt', 'f4f4f2', 0.85), 'shoe': mat('homer_shoe', 'a8adb2', 0.85), 'stubble': mat('homer_stubble', 'c9b48a', 0.85), 'eyewhite': mat('homer_eyewhite', 'fafafa', 0.35), 'black': mat('homer_black', '17191b', 0.85)}
+hm = group('homer_plush', DX + 0.68, DY - 0.1, TOP, rz=-0.3)
+sphere('homer_shoe_l', 0.03, HOMER['shoe'], -0.035, -0.012, 0.018, scale=(1, 1.45, 0.6), parent=hm)
+sphere('homer_shoe_r', 0.03, HOMER['shoe'], 0.035, -0.012, 0.018, scale=(1, 1.45, 0.6), parent=hm)
+cyl('homer_leg_l', 0.033, 0.13, HOMER['jeans'], -0.036, 0, 0.1, verts=24, parent=hm)
+cyl('homer_leg_r', 0.033, 0.13, HOMER['jeans'], 0.036, 0, 0.1, verts=24, parent=hm)
+cyl('homer_cuff_l', 0.037, 0.02, HOMER['jeans'], -0.036, 0, 0.042, verts=24, parent=hm)
+cyl('homer_cuff_r', 0.037, 0.02, HOMER['jeans'], 0.036, 0, 0.042, verts=24, parent=hm)
+sphere('homer_hips', 0.07, HOMER['jeans'], 0, 0, 0.17, scale=(1.05, 0.85, 0.55), parent=hm)
+sphere('homer_torso', 0.085, HOMER['shirt'], 0, 0.005, 0.235, scale=(1, 0.85, 1.05), parent=hm)
+cyl('homer_collar', 0.045, 0.02, HOMER['shirt'], 0, 0, 0.315, verts=24, parent=hm)
+sphere('homer_sleeve_l', 0.036, HOMER['shirt'], -0.085, 0, 0.275, parent=hm)
+sphere('homer_sleeve_r', 0.036, HOMER['shirt'], 0.085, 0, 0.275, parent=hm)
+cyl('homer_arm_l', 0.019, 0.13, HOMER['skin'], -0.105, -0.005, 0.21, rot=(0, 0.25, 0), verts=24, parent=hm)
+cyl('homer_arm_r', 0.019, 0.13, HOMER['skin'], 0.105, -0.005, 0.21, rot=(0, -0.25, 0), verts=24, parent=hm)
+sphere('homer_hand_l', 0.025, HOMER['skin'], -0.122, -0.01, 0.14, parent=hm)
+sphere('homer_hand_r', 0.025, HOMER['skin'], 0.122, -0.01, 0.14, parent=hm)
+cyl('homer_head', 0.058, 0.12, HOMER['skin'], 0, 0, 0.375, verts=24, parent=hm)
+sphere('homer_head_top', 0.058, HOMER['skin'], 0, 0, 0.435, parent=hm)
+sphere('homer_muzzle', 0.056, HOMER['stubble'], 0, -0.022, 0.338, scale=(1.02, 0.95, 0.62), parent=hm)
+sphere('homer_nose', 0.018, HOMER['skin'], 0, -0.07, 0.37, scale=(1, 1.7, 1), parent=hm)
+sphere('homer_eye_l', 0.027, HOMER['eyewhite'], -0.026, -0.05, 0.398, parent=hm)
+sphere('homer_eye_r', 0.027, HOMER['eyewhite'], 0.026, -0.05, 0.398, parent=hm)
+sphere('homer_pupil_l', 0.007, HOMER['black'], -0.026, -0.077, 0.398, parent=hm)
+sphere('homer_pupil_r', 0.007, HOMER['black'], 0.026, -0.077, 0.398, parent=hm)
+sphere('homer_ear_l', 0.016, HOMER['skin'], -0.06, 0.005, 0.37, scale=(0.6, 1, 1), parent=hm)
+sphere('homer_ear_r', 0.016, HOMER['skin'], 0.06, 0.005, 0.37, scale=(0.6, 1, 1), parent=hm)
 
 # ---------- 3-shade floor lamp with vine ----------
 lamp = group('floor_lamp', RX - 0.42, 0.62, 0)
@@ -368,8 +396,6 @@ cyl('ladder_rail_1', 0.018, 1.95, FRAME, 0, 0.2, 0.975, verts=14, bevel=0, paren
 cyl('ladder_rail_2', 0.018, 1.95, FRAME, 0, -0.2, 0.975, verts=14, bevel=0, parent=lad)
 for i in range(6):
     cyl(f'ladder_step_{i+1}', 0.015, 0.4, FRAME, 0, 0, 0.25 + i * 0.29, rot=(radians(90), 0, 0), verts=12, bevel=0, parent=lad)
-box('clothes_jacket', 0.06, 0.36, 0.55, BLACK, BW / 2 + 0.07, 0.45, BH + 0.25, rot=(0, 0.1, 0), bevel=0.03, parent=bed)
-box('clothes_khaki', 0.05, 0.2, 0.42, CREAM, BW / 2 + 0.08, 0.72, BH + 0.12, rot=(0, 0.08, 0), bevel=0.025, parent=bed)
 box('kids_chair_seat', 0.32, 0.3, 0.03, TEAL, 0.05, 0.55, 0.36, bevel=0.014, parent=bed)
 box('kids_chair_back', 0.3, 0.03, 0.3, TEAL, 0.05, 0.7, 0.53, rot=(0.15, 0, 0), bevel=0.014, parent=bed)
 cyl('kids_chair_post', 0.02, 0.3, WHITE, 0.05, 0.55, 0.19, verts=14, bevel=0, parent=bed)
@@ -396,7 +422,6 @@ torus('basketball_seam_1', 0.12, 0.006, NAVY, 0, 0, 0.12, parent=bb)
 torus('basketball_seam_2', 0.12, 0.006, NAVY, 0, 0, 0.12, rot=(radians(90), 0, 0.6), parent=bb)
 torus('basketball_seam_3', 0.12, 0.004, WHITE, 0, 0, 0.12, rot=(0.5, 1.2, 0), parent=bb)
 cyl('waste_basket', 0.12, 0.26, TEAL, RX - 0.36, 0.06, 0.13, r2=0.15, verts=28)
-box('lego_bin', 0.3, 0.2, 0.16, YELLOW, RX - 0.3, -1.1, 0.62, bevel=0.02)
 box('step_stool_top', 0.3, 0.2, 0.05, SKY, -0.5, -1.42, 0.24, bevel=0.02)
 for i, sg in enumerate((-1, 1)):
     box(f'step_stool_leg_{i+1}', 0.06, 0.18, 0.24, PINK, -0.5 + sg * 0.1, -1.42, 0.12, bevel=0.02)
@@ -425,6 +450,11 @@ light('neon_red_2', 'POINT', DX + 0.5, DY + 0.28, DZ + 0.05, 32, srgb('ff2a4a'),
 light('neon_blue', 'POINT', DX - 0.1, DY - 0.35, DZ + 0.35, 22, srgb('3d8dff'), radius=0.3)
 light('neon_purple', 'POINT', -HW + 0.62, 0.1, 1.3, 28, srgb('8a4dff'), radius=0.35)
 light('bed_reading_light', 'POINT', -HW + 0.62 - 0.15, 0.1 + BL / 2 - 0.35, BH + GH + 0.1, 12, srgb('ffc98a'), radius=0.05)
+# ops board backlight (bathroom-mirror halo): board is a live web screen 1.16 x 0.65 at web (1.83, 1.80, -1.72),
+# 4 cm off the back wall. Bake an area light just behind it, aimed at the wall, so the wall carries the glow.
+bl = light('board_backlight', 'AREA', 1.83, HW - TH - 0.022, 1.80, 28, srgb('6fb4ff'), rot=(radians(90), 0, 0), size=1.12, size_y=0.62)
+try: bl.data.spread = radians(180)
+except Exception: pass
 for i, (sz, ang) in enumerate(((1.72, 0.5), (1.42, 2.5), (1.12, 4.4))):
     light(f'lamp_light_{i+1}', 'POINT', RX - 0.42 + cos(ang) * 0.2, 0.62 - sin(ang) * 0.2, sz - 0.12, 14, srgb('ffb347'), radius=0.08)
 w = sc.world or bpy.data.worlds.new('World'); sc.world = w; w.use_nodes = True

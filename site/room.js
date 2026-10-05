@@ -463,7 +463,7 @@ const tealNb = new T.Group(); tealNb.name = 'notebook_teal';
 rbox('teal_nb_pages', 0.2, 0.022, 0.27, 0.004, M.paper, 0, 0.011, 0, tealNb);
 box('teal_nb_cover', 0.19, 0.003, 0.26, M.teal, 0, 0.0235, 0, tealNb);
 for (let i = 0; i < 14; i++) { const r = add('teal_spiral_' + (i + 1), new T.Mesh(new T.TorusGeometry(0.008, 0.0012, 6, 12), M.black), -0.085 + i * 0.013, 0.014, -0.137, tealNb); r.rotation.y = Math.PI / 2; }
-tealNb.position.set(DX + 0.62, TOP, DZ + 0.15); tealNb.rotation.y = -0.1; room.add(tealNb);
+tealNb.position.set(DX - 0.55, TOP, DZ + 0.18); tealNb.rotation.y = -0.1; room.add(tealNb);
 /* sailor duck figure */
 const duck = new T.Group(); duck.name = 'duck_figure';
 [[-0.018, 0.012], [0.018, -0.006]].forEach(([fx, fz], i) => add('duck_foot_' + (i + 1), new T.Mesh(new T.SphereGeometry(0.02, 14, 10), M.orange), fx, 0.006, fz + 0.01, duck).scale.set(1, 0.35, 1.5));
@@ -475,6 +475,16 @@ add('duck_bill', new T.Mesh(new T.SphereGeometry(0.02, 14, 10), M.orange), 0, 0.
 add('duck_hat', new T.Mesh(new T.CylinderGeometry(0.03, 0.026, 0.016, 18), M.navy), 0, 0.155, 0.002, duck).rotation.x = 0.2;
 [[-1, 0.04], [1, 0.04]].forEach(([sg], i) => add('duck_arm_' + (i + 1), new T.Mesh(new T.CapsuleGeometry(0.008, 0.03, 4, 8), M.sky), sg * 0.038, 0.075, 0.006, duck).rotation.z = sg * 1.2);
 duck.position.set(DX + 0.34, TOP, DZ - 0.16); duck.rotation.y = -0.4; room.add(duck);
+/* yellow plush figure (Sid's desk buddy) — Blender-local table converted: (x, y, z)_blender -> (x, z, -y)_web */
+const HM = Object.fromEntries(Object.entries({"skin":"f5c832","jeans":"4a8fd6","shirt":"f4f4f2","shoe":"a8adb2","stubble":"c9b48a","eyewhite":"fafafa","black":"17191b"}).map(([k, c]) => [k, new T.MeshStandardMaterial({ name: 'homer_' + k, color: parseInt(c, 16), roughness: k === 'eyewhite' ? 0.35 : 0.85 })]));
+const homer = new T.Group(); homer.name = 'homer_plush';
+[["homer_shoe_l","sph","shoe",[0.03],[-0.035,-0.012,0.018],[1,1.45,0.6]],["homer_shoe_r","sph","shoe",[0.03],[0.035,-0.012,0.018],[1,1.45,0.6]],["homer_leg_l","cyl","jeans",[0.033,0.13],[-0.036,0,0.1]],["homer_leg_r","cyl","jeans",[0.033,0.13],[0.036,0,0.1]],["homer_cuff_l","cyl","jeans",[0.037,0.02],[-0.036,0,0.042]],["homer_cuff_r","cyl","jeans",[0.037,0.02],[0.036,0,0.042]],["homer_hips","sph","jeans",[0.07],[0,0,0.17],[1.05,0.85,0.55]],["homer_torso","sph","shirt",[0.085],[0,0.005,0.235],[1,0.85,1.05]],["homer_collar","cyl","shirt",[0.045,0.02],[0,0,0.315]],["homer_sleeve_l","sph","shirt",[0.036],[-0.085,0,0.275]],["homer_sleeve_r","sph","shirt",[0.036],[0.085,0,0.275]],["homer_arm_l","cyl","skin",[0.019,0.13],[-0.105,-0.005,0.21],null,0.25],["homer_arm_r","cyl","skin",[0.019,0.13],[0.105,-0.005,0.21],null,-0.25],["homer_hand_l","sph","skin",[0.025],[-0.122,-0.01,0.14]],["homer_hand_r","sph","skin",[0.025],[0.122,-0.01,0.14]],["homer_head","cyl","skin",[0.058,0.12],[0,0,0.375]],["homer_head_top","sph","skin",[0.058],[0,0,0.435]],["homer_muzzle","sph","stubble",[0.056],[0,-0.022,0.338],[1.02,0.95,0.62]],["homer_nose","sph","skin",[0.018],[0,-0.07,0.37],[1,1.7,1]],["homer_eye_l","sph","eyewhite",[0.027],[-0.026,-0.05,0.398]],["homer_eye_r","sph","eyewhite",[0.027],[0.026,-0.05,0.398]],["homer_pupil_l","sph","black",[0.007],[-0.026,-0.077,0.398]],["homer_pupil_r","sph","black",[0.007],[0.026,-0.077,0.398]],["homer_ear_l","sph","skin",[0.016],[-0.06,0.005,0.37],[0.6,1,1]],["homer_ear_r","sph","skin",[0.016],[0.06,0.005,0.37],[0.6,1,1]]].forEach(([n, kind, m, d, p, sc, ry]) => {
+  const geo = kind === 'sph' ? new T.SphereGeometry(d[0], 24, 18) : new T.CylinderGeometry(d[0], d[0], d[1], 24);
+  const o = add(n, new T.Mesh(geo, HM[m]), p[0], p[2], -p[1], homer);
+  if (sc) o.scale.set(sc[0], sc[2], sc[1]);
+  if (ry) o.rotation.z = -ry;
+});
+homer.position.set(DX + 0.68, TOP, DZ + 0.1); homer.rotation.y = -0.3; room.add(homer);
 /* headphones lying on the desk */
 const hp = new T.Group(); hp.name = 'headphones';
 add('headphone_band', new T.Mesh(new T.TorusGeometry(0.075, 0.009, 10, 32, Math.PI * 1.2), M.navy), 0, 0.02, 0, hp).rotation.set(Math.PI / 2, 0, -0.1);
@@ -500,8 +510,8 @@ clock.position.set(DX + 0.7, TOP, DZ - 0.2); clock.rotation.y = -0.3; room.add(c
 cyl('spray_can', 0.028, 0.028, 0.15, M.navy, DX + 0.16, TOP + 0.075, DZ - 0.12, null, 20);
 cyl('spray_cap', 0.026, 0.026, 0.02, M.black, DX + 0.16, TOP + 0.16, DZ - 0.12, null, 20);
 /* bike light */
-rbox('bike_light', 0.03, 0.02, 0.07, 0.006, M.black, DX + 0.56, TOP + 0.01, DZ + 0.02).rotation.y = 0.6;
-box('bike_light_lens', 0.028, 0.012, 0.02, M.red, DX + 0.575, TOP + 0.012, DZ + 0.048).rotation.y = 0.6;
+rbox('bike_light', 0.03, 0.02, 0.07, 0.006, M.black, DX + 0.5, TOP + 0.01, DZ + 0.1).rotation.y = 0.6;
+box('bike_light_lens', 0.028, 0.012, 0.02, M.red, DX + 0.515, TOP + 0.012, DZ + 0.128).rotation.y = 0.6;
 /* pen cup on the left */
 cyl('cup_holder', 0.04, 0.036, 0.09, M.black, DX - 0.52, TOP + 0.045, DZ - 0.08, null, 20);
 ['#e8bf34', '#3fa3a8', '#e2557f', '#f2f1ee'].forEach((c, i) => {
@@ -576,7 +586,29 @@ room.add(avatar.group);
 avatar.setChair(chair);
 window.__avatar = avatar;
 /* SRE desk: chat with the avatar, job log on the main monitor, ops board on the wall (sre.js) */
-import('./sre.js').then(m => m.initSRE({ T, stage, avatar, screens })).catch(e => console.warn('sre desk failed to load', e));
+import('./sre.js').then(m => { m.initSRE({ T, stage, avatar, screens }); backlightBoard(); }).catch(e => console.warn('sre desk failed to load', e));
+/* bathroom-mirror style backlight for the ops board: stand it 4 cm off the wall, hide sre.js's round glow,
+   add a soft rounded-rect halo on the wall + a thin LED edge behind the bezel. The bake adds the real wall light. */
+function backlightBoard() {
+  const b = stage._scene.getObjectByName('tickets_board');
+  if (!b) { setTimeout(backlightBoard, 300); return; }
+  if (b.getObjectByName('board_halo')) return;
+  const BWb = b.geometry.parameters.width, BHb = b.geometry.parameters.height;
+  b.position.z = -1.72;
+  const old = b.getObjectByName('tickets_board_glow'); if (old) old.visible = false;
+  const SX = 1.45, SY = 1.6, hc = cvs(1024, 640), hx = hc.getContext('2d');
+  const iw = 1024 / SX, ih = 640 / SY, x0 = (1024 - iw) / 2, y0 = (640 - ih) / 2;
+  const rr = (pad, r) => { hx.beginPath(); hx.roundRect(x0 - pad, y0 - pad, iw + pad * 2, ih + pad * 2, r); };
+  hx.shadowColor = 'rgba(110,180,255,1)'; hx.shadowBlur = 70; hx.strokeStyle = 'rgba(110,180,255,0.9)'; hx.lineWidth = 26; rr(4, 18); hx.stroke();
+  hx.shadowBlur = 30; hx.shadowColor = 'rgba(200,232,255,1)'; hx.strokeStyle = 'rgba(220,240,255,0.95)'; hx.lineWidth = 8; rr(2, 14); hx.stroke();
+  const htex = new T.CanvasTexture(hc); htex.colorSpace = T.SRGBColorSpace;
+  const halo = new T.Mesh(new T.PlaneGeometry(BWb * SX, BHb * SY), new T.MeshBasicMaterial({ map: htex, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false }));
+  halo.name = 'board_halo'; halo.position.z = -0.036; halo.raycast = () => {}; b.add(halo);
+  const led = new T.MeshBasicMaterial({ name: 'board_led', color: 0xd6ecff, toneMapped: false });
+  [[BWb - 0.02, 0.006, 0, BHb / 2 - 0.01], [BWb - 0.02, 0.006, 0, -BHb / 2 + 0.01], [0.006, BHb - 0.02, BWb / 2 - 0.01, 0], [0.006, BHb - 0.02, -BWb / 2 + 0.01, 0]].forEach(([w, h, x, y], i) => {
+    const m = new T.Mesh(new T.BoxGeometry(w, h, 0.004), led); m.name = 'board_led_' + (i + 1); m.position.set(x, y, -0.026); m.raycast = () => {}; b.add(m);
+  });
+}
 
 /* ============ loft bed (white tube frame, grey fabric guard) ============ */
 const bed = new T.Group(); bed.name = 'loft_bed';
@@ -625,8 +657,6 @@ for (let i = 0; i < 6; i++) cyl('ladder_step_' + (i + 1), 0.015, 0.015, 0.4, M.f
 ladder.position.set(BW / 2 + 0.36, 0, 0.35); ladder.rotation.z = 0.17;
 bed.add(ladder);
 /* clothes slung over the ladder + rail */
-rbox('clothes_jacket', 0.06, 0.55, 0.36, 0.04, M.black, BW / 2 + 0.07, BH + 0.25, -0.45, bed).rotation.z = -0.1;
-rbox('clothes_khaki', 0.05, 0.42, 0.2, 0.03, M.cream, BW / 2 + 0.08, BH + 0.12, -0.72, bed).rotation.z = -0.08;
 /* under the bed */
 rbox('kids_chair_seat', 0.32, 0.03, 0.3, 0.02, M.teal, 0.05, 0.36, -0.55, bed);
 rbox('kids_chair_back', 0.3, 0.3, 0.03, 0.02, M.teal, 0.05, 0.53, -0.7, bed).rotation.x = -0.15;
@@ -656,7 +686,6 @@ add('basketball_seam_2', new T.Mesh(new T.TorusGeometry(0.12, 0.006, 8, 40), M.n
 add('basketball_seam_3', new T.Mesh(new T.TorusGeometry(0.12, 0.004, 8, 40), M.white), 0, 0.12, 0, ball).rotation.set(0.5, 1.2, 0);
 ball.position.set(DX + 0.55, 0, DZ + 0.3); room.add(ball);
 cyl('waste_basket', 0.15, 0.12, 0.26, M.teal, RX - 0.36, 0.13, -0.06, null, 24);
-rbox('lego_bin', 0.3, 0.16, 0.2, 0.02, M.yellow, RX - 0.3, 0.62, 1.1);
 rbox('step_stool_top', 0.3, 0.05, 0.2, 0.02, M.sky, -0.5, 0.24, 1.42);
 [-1, 1].forEach((sg, i) => rbox(`step_stool_leg_${i + 1}`, 0.06, 0.24, 0.18, 0.02, M.pink, -0.5 + sg * 0.1, 0.12, 1.42));
 rbox('backpack', 0.3, 0.4, 0.2, 0.06, M.black, -0.95, 0.2, 1.25).rotation.y = 0.4;
@@ -826,6 +855,7 @@ try {
     const REMOVE = [
       { name: 'clothes_jacket', min: [-0.80, 1.36, -0.80], max: [-0.58, 2.04, -0.28] },
       { name: 'lego_bin',       min: [ 2.02, 0.48,  0.92], max: [ 2.47, 0.80,  1.30] },
+      { name: 'clothes_khaki',  min: [-0.74, 1.30, -0.97], max: [-0.60, 1.84, -0.67] },
     ];
     function dropPieces(mesh, boxes) {
       if (!mesh || !mesh.geometry.index) return 0;
@@ -846,7 +876,9 @@ try {
       const keep = []; for (let i = 0; i < idx.length; i += 3) if (!gone.has(find(idx[i]))) keep.push(idx[i], idx[i + 1], idx[i + 2]);
       const removed = (idx.length - keep.length) / 3; g.setIndex(keep); g.computeBoundingSphere(); return removed;
     }
-    const removedTris = dropPieces(baked.getObjectByName('room_props'), REMOVE);
+    /* v4+ bakes were made without the jacket / khaki / LEGO bin — carving them would cut holes in the bed rail */
+    const isV4 = loadedGlb === 'room-v4.glb';
+    const removedTris = isV4 ? 0 : dropPieces(baked.getObjectByName('room_props'), REMOVE);
     window.__removedTris = removedTris;
     const props = baked.getObjectByName('room_props');
     if (!chairBaked && props && props.geometry.index) {
@@ -874,11 +906,39 @@ try {
       }
     }
     const late = [];
+    /* bakes made before the plush existed (v3): carry the live primitive plush across */
+    if (!isV4) { const hp = room.getObjectByName('homer_plush'); if (hp) baked.add(hp); }   // v4 has the plush baked into desk_items
+    /* v3: the removed jacket left its baked shadow on the grey guard panel (z -0.37..-0.73). Cover that panel half with a
+       patch whose colours are sampled from a clean column of the same baked texture (z = -1.0), so it blends in. */
+    if (!isV4) setTimeout(() => {
+      baked.updateMatrixWorld(true);
+      const ray = new T.Raycaster(), N = 48, y0 = 1.485, y1 = 1.915, gx = -0.72;
+      const pc = cvs(1, N), px = pc.getContext('2d'); let ok = 0;
+      for (let i = 0; i < N; i++) {
+        const y = y1 - (i + 0.5) * (y1 - y0) / N;
+        const o = baked.localToWorld(new T.Vector3(0.6, y, -1.0)), d = baked.localToWorld(new T.Vector3(-0.4, y, -1.0)).sub(o).normalize();
+        ray.set(o, d);
+        const h = ray.intersectObjects([baked], true).find(h => h.object.name === 'room_props');
+        const m = h && h.object.material, img = m && m.map && m.map.image;
+        if (!h || !h.uv || !img) continue;
+        const v = m.map.flipY ? 1 - h.uv.y : h.uv.y;
+        px.drawImage(img, Math.floor(h.uv.x * img.width), Math.floor(v * img.height), 1, 1, 0, i, 1, 1); ok++;
+      }
+      if (ok < N / 2) return;
+      const pt = new T.CanvasTexture(pc); pt.colorSpace = T.SRGBColorSpace; pt.magFilter = T.LinearFilter;
+      const patch = new T.Mesh(new T.PlaneGeometry(0.93, y1 - y0), new T.MeshStandardMaterial({ name: 'guard_patch', map: pt, emissive: 0xffffff, emissiveMap: pt, emissiveIntensity: 0.28, roughness: 1, metalness: 0 }));
+      patch.name = 'bed_guard_patch'; patch.rotation.y = Math.PI / 2; patch.position.set(gx + 0.013, (y0 + y1) / 2, -0.6);
+      baked.add(patch);
+    }, 0);
     keepFromPrimitive.forEach(n => { const o = room.getObjectByName(n); if (!o) return; if (n === 'city_view' || n === 'window_backing') late.push(o); else baked.add(o); });
     stage.setObject(baked);
     late.forEach(o => baked.add(o));
     frame();
     baked.updateMatrixWorld(true);
   };
-  loader.load('./room-v3.glb', onGlb, undefined, () => loader.load('./room.glb', onGlb, undefined, () => {}));
+  let loadedGlb = '';
+  const tryLoad = (files) => { if (!files.length) return; loader.load('./' + files[0], (g) => { loadedGlb = files[0]; onGlb(g); }, undefined, () => tryLoad(files.slice(1))); };
+  /* v3 = the good bake Sid is happy with. Plush, board backlight and the removals are applied live in code on top of it.
+     (room-v4 was a full low-sample re-bake — grainy — so it is not used.) */
+  tryLoad(['room-v3.glb', 'room.glb']);
 } catch (e) { /* loader unavailable offline — primitive room stays */ }
