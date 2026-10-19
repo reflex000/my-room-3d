@@ -44,11 +44,12 @@ export function createAvatar({ T, stage, seat }) {
   /* the climb clip faces -z and keeps its hips ~0.7 above its origin, so the rig starts below the floor and rises */
   const LADDER_FOOT = new T.Vector3(-0.1, 0, 0.25), LADDER_YAW = Math.PI / 2, CLIMB_Y0 = -0.66, CLIMB_Y1 = 0.55, CLIMB_SPEED = 0.5, CLIMB_LEAN = 0.17;
   const climbX = (y) => LADDER_FOOT.x - CLIMB_LEAN * Math.max(0, y - CLIMB_Y0);
+  const LADDER_FACE = LADDER_YAW + Math.PI;   // rig yaw for idle/walk clips that faces the ladder (the climb clip faces it at LADDER_YAW)
   const BED_LIE = new T.Vector3(-1.23, 1.0, 0.19), BED_YAW = 0;   // lieDown clip lies ~0.7 above its origin with the head toward -z -> back wall
   const SPOTS = {
     center: { p: [0.35, 1.1], face: 0.15 },
     window: { p: [1.12, 0.78], face: Math.PI / 2 },
-    ladder: { p: [LADDER_FOOT.x, LADDER_FOOT.z], face: LADDER_YAW },
+    ladder: { p: [LADDER_FOOT.x, LADDER_FOOT.z], face: LADDER_FACE },
     desk:   { p: [1.08, -0.3], face: Math.PI - 0.25, via: [[0.95, 0.4]] },
     door:   { p: [-0.05, -0.05], face: Math.PI + 0.35, via: [[0.0, 0.55]] },
   };
@@ -101,9 +102,10 @@ export function createAvatar({ T, stage, seat }) {
 
     /* upper-body layer: sample a clip's tracks and slerp them onto the bones */
     const UPPER = (n) => /^(Spine|Spine1|Spine2|Neck|Head|Left(Shoulder|Arm|ForeArm|Hand)|Right(Shoulder|Arm|ForeArm|Hand))$/.test(n) || /Hand(Thumb|Index|Middle|Ring|Pinky)\d$/.test(n);
+    const RIGHT_ARM = (n) => /^Right(Shoulder|Arm|ForeArm|Hand)$/.test(n) || /^RightHand(Thumb|Index|Middle|Ring|Pinky)d$/.test(n);
     const samplers = {};
     function sampler(name, filter = UPPER) {
-      const key = name + (filter === UPPER ? '' : '*'); if (samplers[key]) return samplers[key];
+      const key = name + (filter === UPPER ? '' : filter === RIGHT_ARM ? ':R' : '*'); if (samplers[key]) return samplers[key];
       const s = [];
       for (const tr of clips[name].tracks) { const [bn, prop] = tr.name.split('.'); if (prop !== 'quaternion' || !bones[bn] || !filter(bn)) continue; s.push({ bone: bones[bn], interp: tr.createInterpolant(), q: new T.Quaternion() }); }
       return (samplers[key] = { duration: clips[name].duration, apply(t, w) { for (const e of s) { const v = e.interp.evaluate(t); e.q.set(v[0], v[1], v[2], v[3]); e.bone.quaternion.slerp(e.q, w); } } });
@@ -123,7 +125,7 @@ export function createAvatar({ T, stage, seat }) {
     const JOINT = { torso: 'Spine1', head: 'Head', neck: 'Neck', shL: 'LeftArm', shR: 'RightArm', elL: 'LeftForeArm', elR: 'RightForeArm' };
     /* gestures: either a mocap clip sampled on the upper body, or a procedural pose */
     const GESTURES = {
-      wave:    { look: 1, dur: 3.0, face: 'smile', pose: (t) => ({ shR: [0, 0, -2.45], elR: [0, 0, -0.55 + S(t * 9) * 0.45], head: [0, 0, -0.08] }) },
+      wave:    { clip: 'wave', bones: 'rightArm', pingpong: true, look: 1, dur: 3.0, face: 'smile' },
       drink:   { clip: 'drink', dur: 5.2, prop: 'bottle' },
       stretch: { clip: 'stretch', dur: 6, face: 'closed' },
       neck:    { clip: 'neckStretch', dur: 3.2, face: 'closed' },
@@ -195,6 +197,20 @@ export function createAvatar({ T, stage, seat }) {
     const ps = new T.Mesh(new T.PlaneGeometry(0.066, 0.14), new T.MeshBasicMaterial({ color: 0x9fd0ff, toneMapped: false })); ps.position.z = 0.0056; phone.add(ps);
     attach(phone, [0.02, -0.12, 0.04], Q(-0.6, 0, 0));
 
+    /* slippers: the worn pair hides while he is up the ladder / in bed, and a static copy (bind pose = feet flat,
+       toes +z) waits on the floor at the foot of the ladder */
+    let shoes = null; model.traverse(o => { if (/shoes/i.test(o.name) && o.isSkinnedMesh) shoes = o; });
+    const slippers = new T.Group(); slippers.name = 'avatar_slippers'; slippers.visible = false; root.add(slippers);
+    if (shoes) {
+      const g = shoes.geometry.clone(), p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) p.setX(i, p.getX(i) - Math.sign(p.getX(i)) * 0.045);   // a tidier pair than his standing stance
+      g.computeBoundingBox(); g.translate(0, -g.boundingBox.min.y + 0.002, 0);
+      const m = new T.Mesh(g, shoes.material); m.name = 'avatar_slippers_mesh'; m.castShadow = true; m.raycast = () => {}; m.scale.setScalar(SCALE); slippers.add(m);
+      slippers.position.set(LADDER_FOOT.x, 0, LADDER_FOOT.z); slippers.rotation.y = LADDER_FACE;
+    }
+    function slippersOff() { if (shoes) { shoes.visible = false; slippers.visible = true; } }
+    function slippersOn() { if (shoes) { shoes.visible = true; slippers.visible = false; } }
+
     /* ---------- state ---------- */
     /* states: type | sit | walk | stand | standing_up | sitting_down | swivel | climb_in | climb | climb_down | climb_end | to_bed | inbed | from_bed */
     let state = 'type', transT = 0, path = [], faceAfter = 0, onArrive = null, where = 'seat';
@@ -204,6 +220,7 @@ export function createAvatar({ T, stage, seat }) {
     let tossActive = false, tossQueue = 0, tossUntil = 0, tossReleased = false, tossWaiting = false; const balls = [], score = { made: 0, tried: 0 };
     let chairYaw = YAW_DESK, chairYawTarget = YAW_DESK, chairSlide = DESK_SLIDE, chairSlideTarget = DESK_SLIDE, swivelThen = null;
     const SPEED = 0.85, TRANS = 1.15;
+    const TOE_FLOOR = 0.008, ANKLE_FLOOR = 0.08;   // joint heights (room y) when he stands flat: toes 0.017, ankles 0.088
     const v2 = (a) => new T.Vector3(a[0], 0, a[1]);
     const viaBack = () => (where === 'desk' || where === 'door') ? SPOTS[where].via.slice().reverse().map(v2) : where === 'exit' ? [v2([0.25, 1.3])] : [];
     const seated = () => state === 'type' || state === 'sit' || state === 'swivel';
@@ -268,8 +285,8 @@ export function createAvatar({ T, stage, seat }) {
     function goBed() {
       if (['inbed', 'to_bed', 'climb', 'climb_in'].includes(state)) return;
       ensureStanding(() => {
-        path = [...viaBack(), LADDER_FOOT.clone()]; faceAfter = LADDER_YAW; state = 'walk'; where = 'ladder'; setBase('walk', { fade: 0.3, timeScale: 0.85 });
-        onArrive = () => { state = 'climb_in'; transT = 0; setBase('climb', { fade: 0.5 }); };
+        path = [...viaBack(), LADDER_FOOT.clone()]; faceAfter = LADDER_FACE; state = 'walk'; where = 'ladder'; setBase('walk', { fade: 0.3, timeScale: 0.85 });
+        onArrive = () => { slippersOff(); state = 'climb_in'; transT = 0; setBase('climb', { fade: 0.5 }); };
       });
     }
     function leaveBed(then) {
@@ -364,7 +381,7 @@ export function createAvatar({ T, stage, seat }) {
         const clip = sitting ? f.sit : state === 'stand' ? f.stand : null;
         if (clip && actions[clip]) { playFull(name, clip); return true; }
       }
-      gesture = { ...g, name, dur: dur || g.dur || (g.clip ? clips[g.clip].duration * (g.loops || 1) : 3), s: g.clip ? sampler(g.clip) : null }; gStart = nowS();
+      gesture = { ...g, name, dur: dur || g.dur || (g.clip ? clips[g.clip].duration * (g.loops || 1) : 3), s: g.clip ? sampler(g.clip, g.bones === 'rightArm' ? RIGHT_ARM : UPPER) : null }; gStart = nowS();
       mug.visible = g.prop === 'bottle'; deskBottle.visible = !mug.visible; phone.visible = g.prop === 'phone';
       if (state === 'type' && conversing) faceRoom();   // turn to the visitor only when someone is actually talking to him
       return true;
@@ -373,7 +390,7 @@ export function createAvatar({ T, stage, seat }) {
     /* initial pose: typing at the desk */
     placeOnChair(); setBase('typing');
     { const m0 = modeNow(); curMode = m0.mode; awayNote = m0.note;
-      if (m0.mode === 'sleep') { chairYaw = chairYawTarget = YAW_OUT; chairSlide = chairSlideTarget = 0; state = 'inbed'; where = 'ladder'; rig.position.copy(BED_LIE); rig.quaternion.copy(Q(0, BED_YAW, 0)); setBase('lieDown', { once: true, from: -0.05, fade: 0 }); }
+      if (m0.mode === 'sleep') { slippersOff(); chairYaw = chairYawTarget = YAW_OUT; chairSlide = chairSlideTarget = 0; state = 'inbed'; where = 'ladder'; rig.position.copy(BED_LIE); rig.quaternion.copy(Q(0, BED_YAW, 0)); setBase('lieDown', { once: true, from: -0.05, fade: 0 }); }
       else if (m0.mode === 'away') { chairYaw = chairYawTarget = YAW_OUT; chairSlide = chairSlideTarget = 0; state = 'away'; where = 'exit'; rig.position.copy(EXIT); fade = 0.02; fadeTarget = 0; setBase('idle', { fade: 0 }); }   // the fade pass hides him on the first frame
       else if (m0.mode !== 'work') { chairYaw = chairYawTarget = YAW_OUT; chairSlide = chairSlideTarget = 0; state = 'sit'; placeOnChair(); setBase('sitIdle', { fade: 0 }); } }
 
@@ -399,7 +416,7 @@ export function createAvatar({ T, stage, seat }) {
         /* sink / raise the rig in sync with the idle<->climb crossfade so the hips stay level */
         transT += dt / 0.5; const k = clamp(transT, 0, 1);
         rig.position.y = CLIMB_Y0 * (state === 'climb_in' ? k : 1 - k); rig.position.x = climbX(rig.position.y); rig.position.z = LADDER_FOOT.z; rig.rotation.set(0, LADDER_YAW, 0);
-        if (transT >= 1) { if (state === 'climb_in') state = 'climb'; else { state = 'stand'; where = 'ladder'; const f = onArrive; onArrive = null; if (f) f(); } }
+        if (transT >= 1) { if (state === 'climb_in') state = 'climb'; else { rig.rotation.set(0, LADDER_FACE, 0); slippersOn(); state = 'stand'; where = 'ladder'; const f = onArrive; onArrive = null; if (f) f(); } }
       } else if (state === 'climb') {
         rig.position.y += CLIMB_SPEED * dt; rig.position.x = climbX(rig.position.y); rig.rotation.set(0, LADDER_YAW, 0);
         if (rig.position.y >= CLIMB_Y1) { rig.position.copy(LADDER_TOP); state = 'to_bed'; transT = 0; setBase('lieDown', { once: true, fade: 0.8 }); }
@@ -428,6 +445,11 @@ export function createAvatar({ T, stage, seat }) {
         }
       }
       mixer.update(dt);
+      if (state === 'climb_in' || state === 'climb_end') {
+        /* the idle and climb clips face opposite ways; counter-rotate the rig so the blend does not spin him round */
+        bones.Hips.updateWorldMatrix(true, false); bones.Hips.getWorldQuaternion(tq); root.getWorldQuaternion(topQ); tq.premultiply(topQ.invert());
+        tmpV.set(0, 0, 1).applyQuaternion(tq); rig.rotation.y += angDiff(LADDER_FACE, Math.atan2(tmpV.x, tmpV.z));
+      }
 
       /* --- paper toss: ball grows in the hands, leaves at the release frame --- */
       if (gesture && gesture.name === 'toss') {
@@ -475,7 +497,7 @@ export function createAvatar({ T, stage, seat }) {
           const k = clamp(Math.min(t / 0.4, (gesture.dur - t) / 0.4), 0, 1); gW += (k - gW) * (1 - Math.exp(-dt * 10));
           faceMode = gesture.face || 'neutral'; look = gesture.look ? k : 0;
           const w = smooth(clamp(gW, 0, 1));
-          if (gesture.s) gesture.s.apply(((gesture.from || 0) + t) % gesture.s.duration, w);
+          if (gesture.s) { const d = gesture.s.duration, ct = (gesture.from || 0) + t, u = ct % (2 * d); gesture.s.apply(gesture.pingpong ? (u > d ? 2 * d - u : u) : ct % d, w); }
           else if (gesture.pose) { const p = gesture.pose(t); for (const j in p) { const n = JOINT[j]; if (bones[n]) bones[n].quaternion.slerp(targetLocal(n, p[j], tq), w * (p[j][3] === undefined ? 1 : p[j][3])); } }
         }
       } else { gW += (0 - gW) * (1 - Math.exp(-dt * 8)); if (gW < 0.01 && !gesture) { mug.visible = phone.visible = false; deskBottle.visible = true; } }
@@ -486,6 +508,14 @@ export function createAvatar({ T, stage, seat }) {
         const ang = clamp(Math.atan2(camLocal.x, camLocal.z), -1.3, 1.3), pitch = clamp(-Math.atan2(camLocal.y - 1.5, Math.hypot(camLocal.x, camLocal.z)), -0.4, 0.3);
         bones.Head.quaternion.slerp(tq.copy(bones.Head.quaternion).multiply(localFor('Head', Q(pitch * 0.6, ang * 0.55, 0), new T.Quaternion()).multiply(rest.Head.R.clone().invert())), wantLook * 0.9);
         bones.Neck.quaternion.slerp(tq.copy(bones.Neck.quaternion).multiply(localFor('Neck', Q(pitch * 0.3, ang * 0.35, 0), new T.Quaternion()).multiply(rest.Neck.R.clone().invert())), wantLook * 0.9);
+      }
+
+      /* --- feet: pose blends (sit<->stand, walk->idle, off the ladder) dip the soles below the floor; lift him so they don't --- */
+      model.position.y = 0;
+      if (!['inbed', 'to_bed', 'from_bed', 'away'].includes(state)) {
+
+        const low = (a, b) => Math.min(root.worldToLocal(a.getWorldPosition(tmpV)).y, root.worldToLocal(b.getWorldPosition(tmpV)).y);
+        model.position.y = Math.max(0, TOE_FLOOR - low(bones.LeftToeBase, bones.RightToeBase), ANKLE_FLOOR - low(bones.LeftFoot, bones.RightFoot));
       }
 
       /* --- face --- */
