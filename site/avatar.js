@@ -208,6 +208,19 @@ export function createAvatar({ T, stage, seat }) {
       const m = new T.Mesh(g, shoes.material); m.name = 'avatar_slippers_mesh'; m.castShadow = true; m.raycast = () => {}; m.scale.setScalar(SCALE); slippers.add(m);
       slippers.position.set(LADDER_FOOT.x, 0, LADDER_FOOT.z); slippers.rotation.y = LADDER_FACE;
     }
+    /* the tank-top hem hangs straight down through the chair seat; hide whatever of the outfit is inside the space under the
+       cushion (a box in the chair's own frame, so it follows the swivel). Moved far away when he is not on the chair. */
+    let outfit = null; model.traverse(o => { if (/look/i.test(o.name) && o.isMesh) outfit = o; });
+    const SEAT_BOX = { x: [-0.26, 0.285], y: [0.2, 0.44], z: [-0.26, 0.2] };   // chair-local; cushion top 0.527, underside 0.433, front +z
+    const seatLocal = [[1, 0, 0, -SEAT_BOX.x[1]], [-1, 0, 0, SEAT_BOX.x[0]], [0, 1, 0, -SEAT_BOX.y[1]], [0, -1, 0, SEAT_BOX.y[0]], [0, 0, 1, -SEAT_BOX.z[1]], [0, 0, -1, SEAT_BOX.z[0]]]
+      .map(([x, y, z, c]) => new T.Plane(new T.Vector3(x, y, z), c));
+    const seatPlanes = seatLocal.map(p => p.clone()), parked = new T.Matrix4().makeTranslation(0, -100, 0);
+    if (outfit && stage._renderer) { stage._renderer.localClippingEnabled = true; outfit.material.clippingPlanes = seatPlanes; outfit.material.clipIntersection = true; }
+    function updateSeatClip(on) {
+      if (!outfit) return;
+      let M = parked; if (on && chair) { chair.updateWorldMatrix(true, false); M = chair.matrixWorld; }
+      seatPlanes.forEach((p, i) => p.copy(seatLocal[i]).applyMatrix4(M));
+    }
     function slippersOff() { if (shoes) { shoes.visible = false; slippers.visible = true; } }
     function slippersOn() { if (shoes) { shoes.visible = true; slippers.visible = false; } }
 
@@ -509,6 +522,8 @@ export function createAvatar({ T, stage, seat }) {
         bones.Head.quaternion.slerp(tq.copy(bones.Head.quaternion).multiply(localFor('Head', Q(pitch * 0.6, ang * 0.55, 0), new T.Quaternion()).multiply(rest.Head.R.clone().invert())), wantLook * 0.9);
         bones.Neck.quaternion.slerp(tq.copy(bones.Neck.quaternion).multiply(localFor('Neck', Q(pitch * 0.3, ang * 0.35, 0), new T.Quaternion()).multiply(rest.Neck.R.clone().invert())), wantLook * 0.9);
       }
+
+      updateSeatClip(onChair());
 
       /* --- feet: pose blends (sit<->stand, walk->idle, off the ladder) dip the soles below the floor; lift him so they don't --- */
       model.position.y = 0;
