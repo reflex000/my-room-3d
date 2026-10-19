@@ -39,7 +39,9 @@ export function createAvatar({ T, stage, seat }) {
   const yawFwd = (yaw) => new T.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const YAW_OUT = seat.rotY, YAW_DESK = seat.rotY + Math.PI;
   const STANDPT = SEAT.clone().addScaledVector(yawFwd(YAW_OUT), 0.55);
-  const DESK_SLIDE = 0.3;                                                   // chair rolls this much toward the desk for typing
+  const SIT_FWD = 0.06;                                                     // sit this far forward of the chair centre: further back his lower back goes through the lumbar pad
+  const SEAT_SIT = SEAT.clone().addScaledVector(yawFwd(YAW_OUT), SIT_FWD);
+  const DESK_SLIDE = 0.3 - SIT_FWD;                                         // chair rolls this much toward the desk for typing (hands stay where they were)
   /* loft bed: ladder leans on the room-facing side (foot x≈-0.4, rails z 0.05..0.45) */
   /* the climb clip faces -z and keeps its hips ~0.7 above its origin, so the rig starts below the floor and rises */
   const LADDER_FOOT = new T.Vector3(-0.1, 0, 0.25), LADDER_YAW = Math.PI / 2, CLIMB_Y0 = -0.66, CLIMB_Y1 = 0.55, CLIMB_SPEED = 0.5, CLIMB_LEAN = 0.17;
@@ -57,7 +59,11 @@ export function createAvatar({ T, stage, seat }) {
   const EXIT = new T.Vector3(0.1, 0, 2.12);                    // he leaves / returns over the open front edge of the room
   const BASKET = new T.Vector3(2.19, 0.26, -0.06), BASKET_R = 0.118;   // waste basket rim (room coords)
   let chair = null, chairHome = null;   // swivel-chair pivot (room coords), set by room.js
-  api.setChair = (pivot) => { chair = pivot; chairHome = pivot.position.clone(); };
+  api.setChair = (pivot) => {
+    chair = pivot; chairHome = pivot.position.clone();
+    /* the baked backrest is a single-sided panel: from behind it disappeared and the chair looked hollow */
+    pivot.traverse(o => { if (o.isMesh) { o.material.side = T.DoubleSide; o.material.needsUpdate = true; } });
+  };
 
   (async () => {
     const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
@@ -211,7 +217,7 @@ export function createAvatar({ T, stage, seat }) {
     /* the tank-top hem hangs straight down through the chair seat; hide whatever of the outfit is inside the space under the
        cushion (a box in the chair's own frame, so it follows the swivel). Moved far away when he is not on the chair. */
     let outfit = null; model.traverse(o => { if (/look/i.test(o.name) && o.isMesh) outfit = o; });
-    const SEAT_BOX = { x: [-0.26, 0.285], y: [0.2, 0.44], z: [-0.26, 0.2] };   // chair-local; cushion top 0.527, underside 0.433, front +z
+    const SEAT_BOX = { x: [-0.26, 0.285], y: [0.2, 0.44], z: [-0.26, 0.34] };   // chair-local; cushion top 0.527, underside 0.433, front edge +0.275 (he sits SIT_FWD forward, so the hem hangs past it)
     const seatLocal = [[1, 0, 0, -SEAT_BOX.x[1]], [-1, 0, 0, SEAT_BOX.x[0]], [0, 1, 0, -SEAT_BOX.y[1]], [0, -1, 0, SEAT_BOX.y[0]], [0, 0, 1, -SEAT_BOX.z[1]], [0, 0, -1, SEAT_BOX.z[0]]]
       .map(([x, y, z, c]) => new T.Plane(new T.Vector3(x, y, z), c));
     const seatPlanes = seatLocal.map(p => p.clone()), parked = new T.Matrix4().makeTranslation(0, -100, 0);
@@ -243,7 +249,7 @@ export function createAvatar({ T, stage, seat }) {
       if (!chair) return;
       chair.rotation.y = chairYaw;
       chair.position.copy(chairHome).addScaledVector(yawFwd(chairYaw), chairSlide);
-      rig.position.copy(chair.position); rig.position.y = 0.03; rig.rotation.set(0, chairYaw, 0);
+      rig.position.copy(chair.position).addScaledVector(yawFwd(chairYaw), SIT_FWD); rig.position.y = 0.03; rig.rotation.set(0, chairYaw, 0);
     }
     /* swivel the chair (with him on it) to `yaw`, then continue */
     function swivel(yaw, slide, then) { chairYawTarget = yaw; chairSlideTarget = slide; swivelThen = then || null; state = 'swivel'; }
@@ -423,7 +429,7 @@ export function createAvatar({ T, stage, seat }) {
         placeOnChair();
       } else if (state === 'standing_up' || state === 'sitting_down') {
         transT += dt / TRANS; const k = smooth(clamp(transT, 0, 1)), sitW = state === 'standing_up' ? 1 - k : k;
-        rig.position.lerpVectors(STANDPT, SEAT, sitW); rig.position.y = 0.03 * sitW; rig.rotation.set(0, YAW_OUT, 0);
+        rig.position.lerpVectors(STANDPT, SEAT_SIT, sitW); rig.position.y = 0.03 * sitW; rig.rotation.set(0, YAW_OUT, 0);
         if (transT >= 1) { state = state === 'standing_up' ? 'stand' : 'sit'; const f = onArrive; onArrive = null; if (f) f(); }
       } else if (state === 'climb_in' || state === 'climb_end') {
         /* sink / raise the rig in sync with the idle<->climb crossfade so the hips stay level */

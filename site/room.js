@@ -676,6 +676,131 @@ const bedRug = box('bed_rug', BW + 0.3, 0.012, 1.3, M.rug, 0.2, 0.006, 0.1, bed)
 bed.position.set(-HW + 0.62, 0, -0.1);
 room.add(bed);
 
+let closet, closetTick = () => {};
+{
+/* ============ built-in closet (front-left, beside the bed foot) — two sliding shaker doors, click to open ============ */
+function fabricTex(base, kind, rep = 3) {
+  const c = cvs(256, 256), x = c.getContext('2d'); x.fillStyle = base; x.fillRect(0, 0, 256, 256);
+  const img = x.getImageData(0, 0, 256, 256), d = img.data;
+  for (let i = 0; i < 65536; i++) {
+    const px = i & 255, py = i >> 8;
+    let n = (Math.random() - 0.5) * (kind === 'sherpa' ? 60 : 22);
+    if (kind === 'denim') n += ((px + py) % 4 < 2 ? 12 : -9) + Math.sin(px * 0.05) * 6;
+    if (kind === 'canvas') n += (((px % 3) === 0) !== ((py % 3) === 0) ? 7 : -5);
+    if (kind === 'sherpa') n += Math.sin(px * 0.8 + Math.sin(py * 0.6) * 2.4) * Math.cos(py * 0.75 + px * 0.1) * 20;
+    d[i * 4] += n; d[i * 4 + 1] += n; d[i * 4 + 2] += n;
+  }
+  x.putImageData(img, 0, 0);
+  const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 4;
+  return t;
+}
+const CM = {
+  carcass: new T.MeshStandardMaterial({ name: 'closet_melamine', color: 0xf3f2ef, roughness: 0.55 }),
+  door:    new T.MeshStandardMaterial({ name: 'closet_door_paint', color: 0xefeeea, roughness: 0.48 }),
+  hanger:  new T.MeshStandardMaterial({ name: 'hanger_teal', color: 0x2fa39d, roughness: 0.4 }),
+  denim:   new T.MeshStandardMaterial({ name: 'jacket_denim', map: fabricTex('#4a6a92', 'denim'), roughness: 0.95 }),
+  olive:   new T.MeshStandardMaterial({ name: 'jacket_olive_canvas', map: fabricTex('#4b4e33', 'canvas'), roughness: 0.92 }),
+  sherpa:  new T.MeshStandardMaterial({ name: 'jacket_sherpa', map: fabricTex('#efe5d3', 'sherpa', 2), roughness: 1 }),
+  stitchD: new T.MeshStandardMaterial({ name: 'stitch_copper', color: 0xc98c4a, roughness: 0.8 }),
+  stitchO: new T.MeshStandardMaterial({ name: 'stitch_olive', color: 0x36381f, roughness: 0.9 }),
+  button:  new T.MeshStandardMaterial({ name: 'button_copper', color: 0xa8743f, roughness: 0.35, metalness: 0.7 }),
+  tab:     new T.MeshStandardMaterial({ name: 'levis_red_tab', color: 0xb3262b, roughness: 0.7 }),
+  led:     new T.MeshBasicMaterial({ name: 'closet_led', color: 0x5a4e3e, toneMapped: false }),
+};
+closet = new T.Group(); closet.name = 'closet';
+const CW = 1.2, CD = 0.58, CH = 2.32, IW = CW - 0.044;
+box('closet_back', CW, CH, 0.015, CM.carcass, 0, CH / 2, 0.008, closet);
+box('closet_side_l', 0.022, CH, CD, CM.carcass, -CW / 2 + 0.011, CH / 2, CD / 2, closet);
+box('closet_side_r', 0.022, CH, CD, CM.carcass, CW / 2 - 0.011, CH / 2, CD / 2, closet);
+box('closet_floor', CW, 0.06, CD, CM.carcass, 0, 0.03, CD / 2, closet);
+box('closet_bulkhead', CW + 0.06, RH - CH, CD + 0.02, CM.door, 0, (CH + RH) / 2, (CD + 0.02) / 2, closet);
+[-1, 1].forEach((sg, i) => box('closet_casing_' + (i + 1), 0.04, CH, 0.03, CM.door, sg * (CW / 2 + 0.01), CH / 2, CD - 0.005, closet));
+box('closet_track_top', IW, 0.02, 0.07, M.steel, 0, CH - 0.01, CD - 0.035, closet);
+box('closet_track_floor', IW, 0.012, 0.07, M.steel, 0, 0.066, CD - 0.035, closet);
+/* interior: divider, left shelves + bins, right hanging rod + 3 drawers */
+box('closet_divider', 0.02, CH - 0.1, CD - 0.08, CM.carcass, -0.1, CH / 2, (CD - 0.08) / 2 + 0.01, closet);
+[1.92, 1.2, 0.64].forEach((y, i) => box('closet_shelf_l' + (i + 1), 0.468, 0.02, CD - 0.09, CM.carcass, -0.344, y, (CD - 0.09) / 2 + 0.01, closet));
+box('closet_shelf_top_r', 0.668, 0.02, CD - 0.09, CM.carcass, 0.244, 1.92, (CD - 0.09) / 2 + 0.01, closet);
+box('closet_shelf_drawers', 0.668, 0.02, CD - 0.09, CM.carcass, 0.244, 0.71, (CD - 0.09) / 2 + 0.01, closet);
+const rodY = 1.8, rodZ = 0.255;
+cyl('closet_rod', 0.012, 0.012, 0.668, M.chrome, 0.244, rodY, rodZ, closet, 16).rotation.z = Math.PI / 2;
+[-0.08, 0.57].forEach((x, i) => cyl('closet_rod_cup_' + (i + 1), 0.02, 0.02, 0.012, M.chrome, x, rodY, rodZ, closet, 16).rotation.z = Math.PI / 2);
+for (let i = 0; i < 3; i++) {
+  const y = 0.17 + i * 0.205;
+  rbox('closet_drawer_' + (i + 1), 0.655, 0.19, 0.02, 0.004, CM.door, 0.244, y, CD - 0.09, closet);
+  rbox('closet_drawer_handle_' + (i + 1), 0.16, 0.014, 0.022, 0.004, M.black, 0.244, y + 0.04, CD - 0.07, closet);
+}
+const folded = (nm, x, y, cols) => cols.forEach((c, i) => rbox(nm + '_' + (i + 1), 0.3 - (i % 2) * 0.02, 0.042, 0.25, 0.012,
+  new T.MeshStandardMaterial({ name: 'folded_' + c.slice(1), color: c, roughness: 1 }), x + (i % 2 ? 0.01 : -0.005), y + 0.021 + i * 0.043, 0.24, closet));
+folded('closet_folded_top_l', -0.344, 1.93, ['#2d3a52', '#7c8794', '#d9d4ca']);
+folded('closet_folded_top_r', 0.15, 1.93, ['#1f3d2c', '#a33a2c']);
+folded('closet_folded_mid_l', -0.344, 1.21, ['#c8b48d', '#3c4f6b', '#e2ddd3', '#5c6066']);
+[[-0.344, 0.65], [-0.344, 0.07]].forEach(([x, y], i) => {
+  rbox('closet_bin_' + (i + 1), 0.4, 0.2, 0.32, 0.02, M.fabric, x, y + 0.1, 0.24, closet);
+  box('closet_bin_handle_' + (i + 1), 0.1, 0.03, 0.006, M.white, x, y + 0.15, 0.402, closet);
+});
+/* warm LED strip under the right top shelf + a soft light that comes up when the doors open */
+box('closet_led_strip', 0.6, 0.008, 0.012, CM.led, 0.244, 1.905, CD - 0.12, closet).castShadow = false;
+const closetLight = new T.PointLight(0xffd9a8, 0, 1.7, 2); closetLight.position.set(0.244, 1.7, 0.36); closet.add(closetLight);
+
+/* jackets (Levi's Type III Sherpa Trucker in denim, Levi's Sherpa Trucker in dark olive canvas) */
+function makeJacket(nm, shell, stitch, olive) {
+  const j = new T.Group(); j.name = nm;
+  add(nm + '_hook', new T.Mesh(new T.TorusGeometry(0.018, 0.0028, 6, 18, Math.PI * 1.25), M.chrome), 0, 0.0, 0, j).rotation.z = -0.15;
+  cyl(nm + '_hook_stem', 0.003, 0.003, 0.04, M.chrome, 0, -0.035, 0, j, 6);
+  [-1, 1].forEach(sg => { const b = rbox(nm + '_hanger_' + (sg > 0 ? 'r' : 'l'), 0.23, 0.014, 0.01, 0.004, CM.hanger, sg * 0.105, -0.085, 0, j); b.rotation.z = -sg * 0.32; });
+  rbox(nm + '_body', 0.44, 0.56, 0.12, 0.045, shell, 0, -0.42, 0, j);
+  [-1, 1].forEach(sg => {
+    const s2 = sg > 0 ? 'r' : 'l';
+    const sh = rbox(nm + '_shoulder_' + s2, 0.2, 0.07, 0.12, 0.03, shell, sg * 0.12, -0.135, 0, j); sh.rotation.z = -sg * 0.32;
+    const sl = cyl(nm + '_sleeve_' + s2, 0.052, 0.044, 0.56, shell, sg * 0.255, -0.44, -0.005, j, 18); sl.rotation.z = sg * 0.05;
+    cyl(nm + '_cuff_' + s2, 0.046, 0.046, 0.05, shell, sg * 0.268, -0.735, -0.005, j, 18);
+    rbox(nm + '_pocket_' + s2, 0.12, 0.075, 0.012, 0.006, shell, sg * 0.11, -0.24, 0.062, j);
+    cyl(nm + '_pocket_btn_' + s2, 0.008, 0.008, 0.006, CM.button, sg * 0.11, -0.25, 0.07, j, 12).rotation.x = Math.PI / 2;
+    box(nm + '_pleat_' + s2, 0.004, 0.36, 0.004, stitch, sg * 0.11, -0.47, 0.061, j);
+    const lap = rbox(nm + '_collar_' + s2, 0.12, 0.17, 0.024, 0.01, CM.sherpa, sg * 0.07, -0.17, 0.064, j); lap.rotation.z = sg * 0.45;
+  });
+  rbox(nm + '_collar_back', 0.22, 0.08, 0.1, 0.03, CM.sherpa, 0, -0.1, -0.012, j);
+  rbox(nm + '_waistband', 0.446, 0.065, 0.126, 0.02, shell, 0, -0.67, 0, j);
+  box(nm + '_waist_seam', 0.446, 0.004, 0.128, stitch, 0, -0.636, 0, j);
+  box(nm + '_placket', 0.026, 0.46, 0.006, stitch, 0, -0.44, 0.06, j);
+  for (let i = 0; i < 5; i++) cyl(nm + '_btn_' + (i + 1), 0.009, 0.009, 0.006, CM.button, 0, -0.27 - i * 0.095, 0.066, j, 14).rotation.x = Math.PI / 2;
+  box(nm + '_tab', 0.012, 0.026, 0.004, CM.tab, -0.165, -0.26, 0.07, j);
+  return j;
+}
+const jOlive = makeJacket('jacket_olive', CM.olive, CM.stitchO, true);
+jOlive.position.set(0.13, rodY, rodZ); jOlive.rotation.y = -0.85; closet.add(jOlive);
+const jDenim = makeJacket('jacket_denim', CM.denim, CM.stitchD, false);
+jDenim.position.set(0.37, rodY, rodZ); jDenim.rotation.y = -0.85; closet.add(jDenim);
+
+/* sliding shaker doors: back door fixed on the left, front door slides over it */
+function closetDoor(nm, w) {
+  const g = new T.Group(); g.name = nm;
+  const DH = CH - 0.11;
+  box(nm + '_slab', w, DH, 0.02, CM.door, 0, 0, 0, g);
+  [[0.075, DH, -w / 2 + 0.0375, 0], [0.075, DH, w / 2 - 0.0375, 0], [w, 0.1, 0, DH / 2 - 0.05], [w, 0.13, 0, -DH / 2 + 0.065]]
+    .forEach(([bw, bh, x, y], i) => box(nm + '_rail_' + (i + 1), bw, bh, 0.01, CM.door, x, y, 0.014, g));
+  return g;
+}
+const DW = IW / 2 + 0.015, DX0 = IW / 2 - DW / 2, DYc = 0.072 + (CH - 0.11) / 2;
+const doorBack = closetDoor('closet_door_back', DW); doorBack.position.set(-DX0, DYc, CD - 0.055); closet.add(doorBack);
+box('closet_door_back_pull', 0.026, 0.11, 0.006, M.black, DX0 - 0.05, 0, 0.012, doorBack);
+const doorFront = closetDoor('closet_door_front', DW); doorFront.position.set(DX0, DYc, CD - 0.022); closet.add(doorFront);
+box('closet_door_front_pull', 0.026, 0.11, 0.006, M.black, -DX0 + 0.05 - 0.02, 0, 0.012, doorFront);
+closet.rotation.y = Math.PI / 2; closet.position.set(-HW + TH, 0, 1.62);
+room.add(closet);
+const closetState = { open: 0, target: 0 };
+window.__toggleCloset = () => { closetState.target = closetState.target ? 0 : 1; };
+closetTick = function () {
+  closetState.open += (closetState.target - closetState.open) * 0.07;
+  const e = closetState.open, k = 0.25 + 0.75 * e;
+  doorFront.position.x = DX0 - e * (2 * DX0 - 0.01);
+  closetLight.intensity = e * 2.4;
+  CM.led.color.setRGB(k, 0.86 * k, 0.66 * k);
+};
+}
+
+
 /* ============ floor extras ============ */
 const rug = cyl('rug', 1.05, 1.05, 0.014, M.rug, 0.55, 0.007, 0.9, null, 40);
 rug.castShadow = false; rug.scale.set(1.45, 1, 1.05);
@@ -730,6 +855,9 @@ const LINKS = [
   { test: n => n === 'sre_tickets_link', label: 'SRE tickets — open the SRE desk', action: () => window.__sre && window.__sre.open() },
   { test: n => n.startsWith('tickets_board'), label: "Sid's board — open the market desk", url: '/desk' },
   { test: n => n.startsWith('avatar'), label: "That's me 👋 — click to talk", action: () => (window.__sre ? window.__sre.open() : avatar.command('hi')) },
+  { test: n => n.startsWith('jacket_denim'), label: "Levi's Type III Sherpa Trucker — view product", url: 'https://www.levi.com/CA/en_CA/clothing/men/outerwear/sherpa/type-iii-sherpa-trucker-jacket/p/163650346' },
+  { test: n => n.startsWith('jacket_olive'), label: "Levi's Sherpa Trucker, Dark Olive — view product", url: 'https://www.ebay.com/itm/375406974589' },
+  { test: n => n.startsWith('closet'), label: 'Click to open / close the closet', action: () => window.__toggleCloset() },
   { test: n => n.startsWith('curtain'), label: 'Click to open / close the curtains', action: () => window.__toggleCurtains() },
 ];
 const tip = document.createElement('div');
@@ -788,6 +916,7 @@ const t0 = performance.now();
   }
   /* curtains slide toward the frame edges */
   curtain.open += (curtain.target - curtain.open) * 0.06;
+  closetTick();
   [curtainL, curtainR].forEach(g => {
     const pleats = g.children[0];
     pleats.children.forEach((p, i) => { p.position.z = p.userData.baseZ * (1 - curtain.open * 0.82); p.scale.x = 1 + curtain.open * 0.5; });
@@ -909,6 +1038,7 @@ try {
     const late = [];
     /* bakes made before the plush existed (v3): carry the live primitive plush across */
     if (!isV4) { const hp = room.getObjectByName('homer_plush'); if (hp) baked.add(hp); }   // v4 has the plush baked into desk_items
+    baked.add(closet);   // closet is live (doors move), never baked
     /* v3: the removed jacket left its baked shadow on the grey guard panel (z -0.37..-0.73). Cover that panel half with a
        patch whose colours are sampled from a clean column of the same baked texture (z = -1.0), so it blends in. */
     if (!isV4) setTimeout(() => {
@@ -934,6 +1064,44 @@ try {
     keepFromPrimitive.forEach(n => { const o = room.getObjectByName(n); if (!o) return; if (n === 'city_view' || n === 'window_backing') late.push(o); else baked.add(o); });
     stage.setObject(baked);
     late.forEach(o => baked.add(o));
+    /* HD desk items (Blender step2b, baked separately): cut the old low-poly duck / clock / headphones / mouse / plush / puppy notebook
+       out of the v3 desk_items and drop the detailed baked versions in. If desk-hd-v1.glb isn't deployed yet nothing changes. */
+    const loadDeskHd = (file, onFail) => loader.load('./' + file, (dg) => {
+      const isV1 = file === 'desk-hd-v1.glb';
+      const B = (x0, y0, z0, x1, y1, z1) => ({ min: [x0, z0, -y1], max: [x1, z1, -y0] });   // Blender (x, y, z) box -> web
+      const DESK_HD_BOXES = [B(0.985, 1.325, 0.765, 1.135, 1.475, 0.98), B(1.35, 1.37, 0.765, 1.49, 1.51, 0.93), B(1.10, 1.18, 0.765, 1.36, 1.46, 0.84),
+        B(0.965, 1.015, 0.765, 1.095, 1.145, 0.87), B(1.18, 0.98, 0.765, 1.56, 1.30, 1.10), B(0.75, 0.90, 0.765, 0.95, 1.10, 0.83)];
+      const di = baked.getObjectByName('desk_items');
+      let cut = 0; if (di) di.traverse(m => { if (m.isMesh) cut += dropPieces(m, DESK_HD_BOXES); });
+      window.__deskHdCut = cut;
+      /* v1's baked Homer came out with a black head: keep the live plush (lifted onto the work-laptop lid) until v2 lands */
+      const hp = baked.getObjectByName('homer_plush');
+      if (hp && !hp.userData.lifted) { hp.position.y += 0.022; hp.userData.lifted = true; }
+      dg.scene.traverse(o => {
+        if (!o.isMesh) return;
+        const src = Array.isArray(o.material) ? o.material[0] : o.material, map = src && (src.map || src.emissiveMap);
+        if (map) { map.colorSpace = T.SRGBColorSpace; map.anisotropy = 8; map.flipY = false; }
+        /* bake already contains the lighting: unlit, slightly dimmed to sit with the v3 room (no double lighting / neon wash) */
+        o.material = new T.MeshBasicMaterial({ name: 'desk_hd_baked', map, color: 0xc4c4c4 });
+        o.castShadow = true; o.receiveShadow = false;
+      });
+      /* v1/v2: baked plush came out with a black head (old v4 head left inside desk_items enclosed it) — drop it, live homer_plush stands in */
+      if (!file.startsWith('desk-hd-v3')) dg.scene.traverse(o => {
+        if (!o.isMesh || !o.geometry.index) return;
+        const g = o.geometry, idx = g.index.array, pos = g.attributes.position, n = pos.count, par = new Int32Array(n);
+        for (let i = 0; i < n; i++) par[i] = i;
+        const f = (a) => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+        for (let i = 0; i < idx.length; i += 3) { const a = f(idx[i]); par[f(idx[i + 1])] = a; par[f(idx[i + 2])] = a; }
+        const bb = new Map();
+        for (let i = 0; i < n; i++) { const r = f(i), x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i); let e = bb.get(r); if (!e) bb.set(r, e = [x, y, z, x, y, z]); e[0] = Math.min(e[0], x); e[1] = Math.min(e[1], y); e[2] = Math.min(e[2], z); e[3] = Math.max(e[3], x); e[4] = Math.max(e[4], y); e[5] = Math.max(e[5], z); }
+        const lift = new Set(); for (const [r, e] of bb) if (e[0] >= 1.27 && e[3] <= 1.53 && e[1] >= 0.76 && e[4] <= 1.26 && e[2] >= -1.27 && e[5] <= -1.01) lift.add(r);
+        const keep = []; for (let i = 0; i < idx.length; i += 3) if (!lift.has(f(idx[i]))) keep.push(idx[i], idx[i + 1], idx[i + 2]);
+        g.setIndex(keep); g.computeBoundingSphere(); g.computeBoundingBox();
+        window.__homerLifted = lift.size;
+      });
+      dg.scene.name = 'desk_hd'; baked.add(dg.scene); window.__deskHdFile = file;
+    }, undefined, () => onFail && onFail());
+    loadDeskHd('desk-hd-v3.glb', () => loadDeskHd('desk-hd-v2.glb', () => loadDeskHd('desk-hd-v1.glb')));
     frame();
     baked.updateMatrixWorld(true);
   };
