@@ -138,6 +138,7 @@ export function createAvatar({ T, stage, seat }) {
       phone:   { clip: 'phone', dur: 8, prop: 'phone', from: 1.5 },
       laugh:   { clip: 'sitLaugh', dur: 4.5, look: 1, face: 'laugh' },
       thumbs:  { look: 1, dur: 2.6, face: 'smile', pose: (t) => ({ shL: [-1.1, 0, -0.1], elL: [-1.35, 0, 0], head: [0.04 + S(t * 6) * 0.04, 0, 0.06] }) },
+      reach:   { dur: 1.5, pose: () => ({ shR: [-1.3, 0, 0.2], elR: [-0.45, 0, 0], torso: [0.1, 0, 0], head: [0.15, 0, 0] }) },
       think:   { look: 1, dur: 4.5, face: 'brow', pose: (t) => ({ shR: [-0.8, 0, 0.95], elR: [-2.1, 0, 0], head: [0.12, -0.18, -0.1 + S(t * 1.2) * 0.03] }) },
       nod:     { look: 1, dur: 1.8, face: 'smile', pose: (t) => ({ head: [0.1 + S(t * 9) * 0.18, 0, 0] }) },
       no:      { look: 1, dur: 1.9, pose: (t) => ({ head: [0.03, S(t * 9) * 0.36, 0] }) },
@@ -241,7 +242,7 @@ export function createAvatar({ T, stage, seat }) {
     const SPEED = 0.85, TRANS = 1.15;
     const TOE_FLOOR = 0.008, ANKLE_FLOOR = 0.08;   // joint heights (room y) when he stands flat: toes 0.017, ankles 0.088
     const v2 = (a) => new T.Vector3(a[0], 0, a[1]);
-    const viaBack = () => (where === 'desk' || where === 'door') ? SPOTS[where].via.slice().reverse().map(v2) : where === 'exit' ? [v2([0.25, 1.3])] : [];
+    const viaBack = () => (SPOTS[where] && SPOTS[where].via) ? SPOTS[where].via.slice().reverse().map(v2) : where === 'exit' ? [v2([0.25, 1.3])] : [];
     const seated = () => state === 'type' || state === 'sit' || state === 'swivel';
     const onChair = () => seated() || state === 'sitting_down' || state === 'standing_up';
 
@@ -313,7 +314,7 @@ export function createAvatar({ T, stage, seat }) {
       setBase('climb', { fade: 1.0 });
     }
     function wander() {
-      const keys = Object.keys(SPOTS).filter(k => k !== where && k !== 'ladder'); const k = pickOne(keys);
+      const keys = Object.keys(SPOTS).filter(k => k !== where && k !== 'ladder' && k !== 'closet'); const k = pickOne(keys);
       walkTo(k, () => { setTimeout(() => { if (state === 'stand' && where === k && !conversing) goHome(); }, 9000 + Math.random() * 6000); });
     }
 
@@ -336,6 +337,7 @@ export function createAvatar({ T, stage, seat }) {
     function goHome() { if (curMode === 'work') goType(); else if (curMode === 'sleep') goBed(); else if (curMode === 'away') goAway(awayNote); else goSit(() => faceYaw(YAW_OUT)); }
     function enterMode(m) {
       awayNote = m.note;
+      if (m.mode === 'sleep' || m.mode === 'away') takeOffNow();
       if (m.mode === 'sleep') goBed();
       else if (m.mode === 'away') goAway(m.note);
       else if (m.mode === 'work') goType();
@@ -359,6 +361,68 @@ export function createAvatar({ T, stage, seat }) {
       ensureStanding(() => { path = [...viaBack(), v2([0.25, 1.3]), EXIT.clone()]; faceAfter = 0; state = 'walk'; where = 'exit'; setBase('walk', { fade: 0.3, timeScale: 0.85 }); onArrive = () => { state = 'away'; fadeTarget = 0; }; });
     }
     function comeBack(then) { rig.position.copy(EXIT); rig.rotation.set(0, Math.PI, 0); fadeTarget = 1; state = 'stand'; where = 'exit'; setBase('idle', { fade: 0.2 }); if (then) then(); }
+
+    /* ---------- trying on a jacket from the closet ----------
+       api.tryOn({ key, file, label, url, spot:[x,z], face, via, onTake(), onReturn() }) — room.js owns the closet and the hangers;
+       this walks him there, swaps the jacket onto his skeleton (skinned GLB with the same armature), and shows it off. */
+    const timers = []; const later = (sec, fn) => timers.push({ t: nowS() + sec, fn });
+    const jacketCache = {}; let wearing = null, tryBusy = false;
+    async function loadJacket(file) {
+      if (jacketCache[file]) return jacketCache[file];
+      const jg = await loader.loadAsync('./' + file), list = [], host = bones.Hips.parent;
+      jg.scene.traverse(o => { if (o.isSkinnedMesh) list.push(o); });
+      for (const m of list) {
+        const sk = m.skeleton; m.removeFromParent(); m.position.set(0, 0, 0); m.quaternion.identity(); m.scale.set(1, 1, 1);
+        m.bind(new T.Skeleton(sk.bones.map(b => bones[b.name]), sk.boneInverses), m.bindMatrix);
+        m.frustumCulled = false; m.castShadow = true; m.raycast = () => {}; m.name = 'avatar_jacket_' + m.name; m.visible = false;
+        const mt = m.material; mt.metalness = Math.min(mt.metalness || 0, 0.3); mt.envMapIntensity = 0;
+        if (mt.map) { mt.emissive = new T.Color(0xffffff); mt.emissiveMap = mt.map; mt.emissiveIntensity = 0.2; }   // same lift as his other clothes
+        host.add(m);
+      }
+      return (jacketCache[file] = list);
+    }
+    const showJacket = (j, on) => { if (j) for (const m of j.meshes) m.visible = on; };
+    const chip = document.createElement('div');
+    chip.style.cssText = 'position:fixed;left:16px;right:16px;bottom:64px;margin:0 auto;width:fit-content;max-width:calc(100vw - 32px);box-sizing:border-box;z-index:41;display:none;align-items:center;gap:10px;padding:8px 10px 8px 14px;border-radius:999px;background:rgba(12,14,20,.9);color:#eef1f6;border:1px solid rgba(255,255,255,.16);font:600 13px/1.2 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.4)';
+    const chipText = document.createElement('span'); chipText.style.cssText = 'flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    const chipLink = document.createElement('a'); chipLink.textContent = 'View ↗'; chipLink.target = '_blank'; chipLink.rel = 'noopener noreferrer';
+    chipLink.style.cssText = 'flex:none;color:#04121d;background:#4aa8e0;padding:6px 11px;border-radius:999px;text-decoration:none;font-weight:700';
+    const chipOff = document.createElement('button'); chipOff.type = 'button'; chipOff.textContent = 'Take it off';
+    chipOff.style.cssText = 'flex:none;color:#eef1f6;background:none;border:1px solid rgba(255,255,255,.25);padding:6px 11px;border-radius:999px;font:inherit;cursor:pointer';
+    chip.append(chipText, chipLink, chipOff); document.body.appendChild(chip);
+    chipOff.onclick = () => takeOff();
+    function setChip(j) {
+      if (!j) { chip.style.display = 'none'; return; }
+      chipText.textContent = '🧥 ' + j.label; chipLink.style.display = j.url ? '' : 'none'; if (j.url) chipLink.href = j.url; chip.style.display = 'flex';
+    }
+    const camYaw = () => { camLocal.copy(stage._camera.position); root.worldToLocal(camLocal); return Math.atan2(camLocal.x - rig.position.x, camLocal.z - rig.position.z); };
+    function turnTo(yaw, then) { path = []; faceAfter = yaw; state = 'walk'; onArrive = then || null; setBase('idle', { fade: 0.3 }); }
+    function atCloset(o, then) {
+      SPOTS.closet = { p: o.spot, face: o.face, via: o.via || [] };
+      walkTo('closet', () => { play('reach'); later(0.75, then); });
+    }
+    function takeOffNow() { if (!wearing) return; const j = wearing; wearing = null; showJacket(j, false); if (j.onReturn) j.onReturn(); setChip(null); }
+    function takeOff(then) {
+      if (!wearing || tryBusy) return; tryBusy = true; api.hold(40); const j = wearing;
+      atCloset(j, () => { takeOffNow(); later(0.9, () => { tryBusy = false; holdUntil = nowS() + 4; goHome(); if (then) then(); }); });
+    }
+    async function tryOn(o) {
+      if (tryBusy || ['away', 'climb', 'climb_in', 'climb_down', 'climb_end', 'to_bed', 'from_bed'].includes(state)) return false;
+      if (wearing && wearing.key === o.key) { play('thumbs'); say('Already wearing it 😎', 3); return true; }
+      tryBusy = true; api.hold(60);
+      let meshes; try { meshes = await loadJacket(o.file); } catch (e) { tryBusy = false; say("Can't find that one right now", 3); return false; }
+      const j = { ...o, meshes };
+      say(pickOne(['Ooh, good pick', 'Let me try that one', 'Give me a sec 🧥']), 2.5);
+      atCloset(o, () => {
+        if (wearing) takeOffNow();
+        showJacket(j, true); wearing = j; if (o.onTake) o.onTake();
+        later(0.9, () => walkTo('center', () => turnTo(camYaw(), () => {
+          play('thumbs'); say(pickOne(['How do I look? 😎', 'How do I look? Be honest 😄', 'Fits well, right?']), 4.5); setChip(j); tryBusy = false;
+          later(9, () => { if (!tryBusy && wearing === j && state === 'stand' && !conversing) { holdUntil = nowS() + 2; goHome(); } });
+        })));
+      });
+      return true;
+    }
 
     /* ---------- paper toss ---------- */
     const tossYaw = () => Math.atan2(BASKET.x - SEAT.x, BASKET.z - SEAT.z);
@@ -417,6 +481,7 @@ export function createAvatar({ T, stage, seat }) {
     const LADDER_TOP = new T.Vector3(climbX(CLIMB_Y1), CLIMB_Y1, LADDER_FOOT.z);
     api.update = function update() {
       const now = nowS(), dt = Math.min(0.1, now - last); last = now;
+      for (let i = timers.length - 1; i >= 0; i--) if (now >= timers[i].t) { const f = timers[i].fn; timers.splice(i, 1); f(); }
 
       /* --- chair + locomotion --- */
       if (chair && !onChair()) { chair.rotation.y = chairYaw; chair.position.copy(chairHome).addScaledVector(yawFwd(chairYaw), chairSlide); }
@@ -626,7 +691,8 @@ export function createAvatar({ T, stage, seat }) {
     api.speaking = (on) => { voiceOn = !!on; if (!on) voiceLevel = 0; }; api.mouth = (v) => { voiceLevel = v; };
     api.toss = toss; api.score = () => ({ ...score }); api.mode = () => ({ ...modeNow(), state });
     api.play = play; api.say = say; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.type = goType; api.bed = goBed; api.up = ensureStanding;
-    api.state = () => ({ state, where, base: base && base.getClip().name, chairYaw: +chairYaw.toFixed(2) });
+    api.state = () => ({ state, where, base: base && base.getClip().name, chairYaw: +chairYaw.toFixed(2), wearing: wearing && wearing.key });
+    api.tryOn = tryOn; api.takeOff = takeOff;
     api._dbg = { clips, sampler, mixer, setBase, rest, actions };
     api.debugClip = (name, opts) => { state = 'stand'; rig.position.set(0.35, 0, 1.1); rig.rotation.set(0, 0.15, 0); setBase(name, opts || {}); };
     api.ready = true;

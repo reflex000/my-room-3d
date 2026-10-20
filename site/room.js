@@ -677,6 +677,13 @@ bed.position.set(-HW + 0.62, 0, -0.1);
 room.add(bed);
 
 let closet, closetTick = () => {};
+/* jackets in the closet: click one and Sid walks over and tries it on (skinned GLBs + hanger copies from the 3D designer) */
+const JACKETS = [
+  { key: 'denim',        file: 'jacket-denim',        label: "Levi's Type III Sherpa Trucker",  url: 'https://www.levi.com/CA/en_CA/clothing/men/outerwear/sherpa/type-iii-sherpa-trucker-jacket/p/163650346' },
+  { key: 'olive',        file: 'jacket-olive',        label: "Levi's Sherpa Trucker, Dark Olive", url: 'https://www.ebay.com/itm/375406974589' },
+  { key: 'suede_brown',  file: 'jacket-suede-brown',  label: 'Zara Suede Relaxed-Fit Jacket',   url: 'https://www.zara.com/ca/en/suede-relaxed-fit-jacket-p04416326.html' },
+  { key: 'bomber_taupe', file: 'jacket-bomber-taupe', label: 'Suede Bomber, Taupe',             url: null },
+];
 {
 /* ============ built-in closet (front-left, beside the bed foot) — two sliding shaker doors, click to open ============ */
 function fabricTex(base, kind, rep = 3) {
@@ -772,6 +779,32 @@ const jOlive = makeJacket('jacket_olive', CM.olive, CM.stitchO, true);
 jOlive.position.set(0.13, rodY, rodZ); jOlive.rotation.y = -0.85; closet.add(jOlive);
 const jDenim = makeJacket('jacket_denim', CM.denim, CM.stitchD, false);
 jDenim.position.set(0.37, rodY, rodZ); jDenim.rotation.y = -0.85; closet.add(jDenim);
+JACKETS[0].obj = jDenim; JACKETS[1].obj = jOlive;
+/* the real jackets replace the box ones the first time the closet opens (about 5 MB, so not on page load) */
+const HANG_X = [0.11, 0.23, 0.35, 0.47], HANG_ROT = -1.3;   // the open (right) half of the closet, clear of both side walls
+let hangersLoading = null;
+function loadHangers() {
+  if (hangersLoading) return hangersLoading;
+  hangersLoading = import('three/addons/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
+    const L = new GLTFLoader();
+    return Promise.all(JACKETS.map((j, i) => L.loadAsync('./' + j.file + '-hanger.glb').then((g) => {
+      const h = g.scene; h.name = 'jacket_' + j.key + '_hanger_group';
+      h.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      h.scale.setScalar(0.92); h.position.set(HANG_X[i], rodY, rodZ); h.rotation.y = HANG_ROT;
+      if (j.obj) j.obj.removeFromParent();
+      j.obj = h; h.visible = !j.worn; closet.add(h);
+    }).catch(() => {})));
+  });
+  return hangersLoading;
+}
+window.__tryOnJacket = (key) => {
+  const i = JACKETS.findIndex(x => x.key === key), j = JACKETS[i]; if (!j || !avatar.tryOn) return;
+  loadHangers();
+  avatar.tryOn({ key, file: j.file + '.glb', label: j.label, url: j.url,
+    spot: [-0.95, 1.62 - HANG_X[i]], face: -Math.PI / 2, via: [[-0.3, 1.25]],   // closet is turned 90°: its local x runs along -z
+    onTake: () => { j.worn = true; if (j.obj) j.obj.visible = false; },
+    onReturn: () => { j.worn = false; if (j.obj) j.obj.visible = true; } });
+};
 
 /* sliding shaker doors: back door fixed on the left, front door slides over it */
 function closetDoor(nm, w) {
@@ -790,7 +823,7 @@ box('closet_door_front_pull', 0.026, 0.11, 0.006, M.black, -DX0 + 0.05 - 0.02, 0
 closet.rotation.y = Math.PI / 2; closet.position.set(-HW + TH, 0, 1.62);
 room.add(closet);
 const closetState = { open: 0, target: 0 };
-window.__toggleCloset = () => { closetState.target = closetState.target ? 0 : 1; };
+window.__toggleCloset = () => { closetState.target = closetState.target ? 0 : 1; if (closetState.target) loadHangers(); };
 closetTick = function () {
   closetState.open += (closetState.target - closetState.open) * 0.07;
   const e = closetState.open, k = 0.25 + 0.75 * e;
@@ -855,8 +888,7 @@ const LINKS = [
   { test: n => n === 'sre_tickets_link', label: 'SRE tickets — open the SRE desk', action: () => window.__sre && window.__sre.open() },
   { test: n => n.startsWith('tickets_board'), label: "Sid's board — open the market desk", url: '/desk' },
   { test: n => n.startsWith('avatar'), label: "That's me 👋 — click to talk", action: () => (window.__sre ? window.__sre.open() : avatar.command('hi')) },
-  { test: n => n.startsWith('jacket_denim'), label: "Levi's Type III Sherpa Trucker — view product", url: 'https://www.levi.com/CA/en_CA/clothing/men/outerwear/sherpa/type-iii-sherpa-trucker-jacket/p/163650346' },
-  { test: n => n.startsWith('jacket_olive'), label: "Levi's Sherpa Trucker, Dark Olive — view product", url: 'https://www.ebay.com/itm/375406974589' },
+  ...JACKETS.map(j => ({ test: n => n.startsWith('jacket_' + j.key), label: 'Try it on — ' + j.label, action: () => window.__tryOnJacket(j.key) })),
   { test: n => n.startsWith('closet'), label: 'Click to open / close the closet', action: () => window.__toggleCloset() },
   { test: n => n.startsWith('curtain'), label: 'Click to open / close the curtains', action: () => window.__toggleCurtains() },
 ];
