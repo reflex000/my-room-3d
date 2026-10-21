@@ -169,7 +169,7 @@ export function initDJ({ avatar }) {
   function ensureCtx() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
     ctx = new (window.AudioContext || window.webkitAudioContext)();
-    master = ctx.createGain(); master.gain.value = +vol.value;
+    master = ctx.createGain(); master.gain.value = masterLevel();
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -10; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.2;
     analyser = ctx.createAnalyser(); analyser.fftSize = 512;
     master.connect(comp); comp.connect(analyser); analyser.connect(ctx.destination);
@@ -183,7 +183,10 @@ export function initDJ({ avatar }) {
     }
     applyXfader();
   }
-  vol.oninput = () => { if (master) master.gain.setTargetAtTime(+vol.value, ctx.currentTime, 0.05); };
+  let ducked = false;   // the SRE chat ducks the music while it listens for the visitor's voice
+  const masterLevel = () => +vol.value * (ducked ? 0.2 : 1);
+  vol.oninput = () => { if (master) master.gain.setTargetAtTime(masterLevel(), ctx.currentTime, 0.05); };
+  function duck(on) { ducked = !!on; if (master) master.gain.setTargetAtTime(masterLevel(), ctx.currentTime, 0.15); }
 
   /* ---------- library ---------- */
   const tracks = []; let nowIdx = -1, nextIdx = -1;
@@ -311,7 +314,7 @@ export function initDJ({ avatar }) {
   let demosAdded = false;
   async function addDemos() {
     if (demosAdded) return; demosAdded = true; demoBtn.disabled = true; status.textContent = 'Making the demo grooves…';
-    for (const g of DEMOS) { const r = await renderGroove(g); addTrack({ title: g.title, url: r.url, bpm: g.bpm, firstBeat: 0, beats: r.beats, downbeat: 0, phrase0: 0, intro: 0, outro: r.beats - 32, rms: r.rms, duration: r.duration, analysing: false }); }
+    for (const g of DEMOS) { const r = await renderGroove(g); addTrack({ title: g.title, url: r.url, bpm: g.bpm, firstBeat: 0, beats: r.beats, downbeat: 0, phrase0: 0, intro: 0, outro: r.beats - 32, rms: r.rms, duration: r.duration, analysing: false, demo: true }); }
     status.textContent = 'Demo grooves ready.';
   }
   demoBtn.onclick = addDemos;
@@ -656,10 +659,10 @@ export function initDJ({ avatar }) {
   requestAnimationFrame(rigTick);
 
   if (store.get('dj.pro')) setPro(true);
-  const api = { addFiles, addDemos, party, start, pause: pauseAll, mixNow: () => mixBtn.onclick(), orderByTempo, setPro,
+  const api = { addFiles, addDemos, party, start, pause: pauseAll, mixNow: () => mixBtn.onclick(), orderByTempo, setPro, unlock: ensureCtx, duck,
     loadDeck: (i, idx) => loadDeck(decks[i], idx), togglePlay: (i) => togglePlay(decks[i]), hotCue: (i, k, clear) => hotCue(decks[i], k, clear),
     setLoop: (i, n) => setLoop(decks[i], n), exitLoop: (i) => exitLoop(decks[i]), sync: (i) => sync(decks[i]), echoOut: (i) => echoOut(decks[i]),
-    state: () => ({ playing: playingAny(), mixing: mixing && mixing.style, cur, nowIdx, nextIdx, tracks: tracks.map(t => ({ title: t.title, bpm: t.bpm, firstBeat: t.firstBeat, downbeat: t.downbeat, phrase0: t.phrase0, outro: t.outro, beats: t.beats, rms: t.rms && +t.rms.toFixed(3), cues: t.cues })) }),
+    state: () => ({ playing: playingAny(), mixing: mixing && mixing.style, cur, nowIdx, nextIdx, own: tracks.filter(t => !t.demo).length, tracks: tracks.map(t => ({ title: t.title, bpm: t.bpm, firstBeat: t.firstBeat, downbeat: t.downbeat, phrase0: t.phrase0, outro: t.outro, beats: t.beats, rms: t.rms && +t.rms.toFixed(3), cues: t.cues })) }),
     _analyse: analyseAudio, _render: renderGroove, _demos: DEMOS, _debug: () => ({ decks, posOf, beatOfPos, phaseAt, ctx, mixing, rigTick, drawPro, proUI }) };
   window.__djBooth = api; return api;
 }

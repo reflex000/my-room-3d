@@ -131,21 +131,46 @@ export function initSRE({ T, stage, avatar, screens }) {
       if (!text) continue;
       await send(text, { voice: true });
     }
-    setV('idle'); voice.release();
+    setV('idle'); voice.release(); dj('duck', false);
   }
   function toggleVoice() {
     if (!invite) { addMsg('system', 'Enter your invite code first.'); return; }
-    if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); setV('idle'); return; }
-    voice.unlock(); if (!speakOn) { speakOn = true; LS.set('sre.speak', true); paintSpk(); } voiceLoop = true; voiceConversation();
+    if (voiceLoop) { voiceLoop = false; voice.stopListening(); voice.stopSpeaking(); dj('duck', false); setV('idle'); return; }
+    voice.unlock(); dj('unlock'); dj('duck', true); if (!speakOn) { speakOn = true; LS.set('sre.speak', true); paintSpk(); } voiceLoop = true; voiceConversation();
   }
 
-  /* any tap inside the panel counts as permission to play sound */
-  panel.addEventListener('pointerdown', () => voice.unlock(), { capture: true });
+  /* any tap inside the panel counts as permission to play sound (his voice now, the DJ booth later) */
+  panel.addEventListener('pointerdown', () => { voice.unlock(); dj('unlock'); }, { capture: true });
 
   function greet() { addMsg('system', 'You walked into Sid\'s SRE shop. Ask for what you need — he will ask the questions an SRE would.'); }
 
+  /* ---------- the room: what he is wearing, the DJ booth (dj.js), the closet (room.js) ---------- */
+  const dj = (fn, ...a) => { try { const b = window.__djBooth; if (b && typeof b[fn] === 'function') return b[fn](...a); } catch (e) {} };
+  function roomState() {
+    const s = av('state') || {}, d = dj('state');
+    return { wearing: s.wearing || null, music: d ? { playing: !!d.playing, tracks: d.tracks.length, own: d.own > 0 } : null };
+  }
+  function runRoom(acts) {
+    for (const a of acts || []) {
+      if (a.type === 'music') {
+        const d = dj('state'); if (!d) { addMsg('system', 'The DJ booth is still loading. Try again in a moment.'); continue; }
+        av('converse', false);
+        if (a.op === 'stop') { if (d.playing) dj('pause'); }
+        else if (a.op === 'next' && d.playing) dj('mixNow');
+        else if (!d.playing) {
+          dj('party');
+          /* the mic would only hear the music: end the voice loop, he can tap 🎙 again (the music ducks while it listens) */
+          if (voiceLoop) { voiceLoop = false; voice.stopListening(); dj('duck', false); addMsg('system', 'Music is on 🎧 Tap 🎙 when you want to talk again.'); }
+        }
+      } else if (a.type === 'jacket') {
+        av('converse', false);
+        if (a.key === 'off') av('takeOff'); else if (window.__tryOnJacket) window.__tryOnJacket(a.key);
+      }
+    }
+  }
+
   /* ---------- chat ---------- */
-  const short = (s) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > 110 ? s.slice(0, 107) + '…' : s; };
+  const short =(s) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > 110 ? s.slice(0, 107) + '…' : s; };
   async function send(text, opts = {}) {
     if (awaitingPass) { addMsg('user', '••••••'); return tryUnlock(text); }   // the passphrase never goes into the chat history
     if (/^\s*(lock|hide|lock it|hide (it|my (numbers|portfolio))|private (mode )?off)\s*[.!]?\s*$/i.test(text)) { addMsg('user', text); if (unlocked()) { lockPrivate(false); if (speakOn) speakReply('Locked.'); } else addMsg('system', 'Already locked.'); return; }
@@ -153,7 +178,7 @@ export function initSRE({ T, stage, avatar, screens }) {
     voice.unlock(); busy = true; renderFoot(); const dots = addMsg('system', 'Sid is thinking…');
     av('converse', true); av('play', 'think', 6);
     try {
-      const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token), voice: !!opts.voice, session: unlocked() ? privateSession : undefined }) });
+      const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite, messages, jobs: jobs.map(j => j.token), voice: !!opts.voice, session: unlocked() ? privateSession : undefined, room: roomState() }) });
       const data = await r.json().catch(() => ({}));
       dots.remove();
       if (r.status === 401) { invite = ''; LS.set('sre.invite', ''); messages.pop(); pending = text; addMsg('system', 'That invite code did not work — enter it again below and I will resend your message.'); }
@@ -164,6 +189,7 @@ export function initSRE({ T, stage, avatar, screens }) {
         if (data.actions && data.actions.includes('ask_passphrase')) { awaitingPass = true; renderFoot(); }
         av('say', short(data.reply)); av('play', (data.actions && data.actions[0]) || 'talk', data.actions && data.actions[0] ? undefined : Math.min(6, 2 + data.reply.length * 0.04));
         if (speakOn || (opts.voice && voiceLoop)) { busy = false; renderFoot(); await speakReply(data.reply); }
+        runRoom(data.room);   // after he has said it: "heading to the decks" → walks over and the music starts
         if (data.job) startJob(data.job);
         else if (jobs.some(j => status[j.id] && !status[j.id].done)) setTimeout(() => av('type'), 7000);   // he answers, then goes back to the job
       }

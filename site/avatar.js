@@ -346,9 +346,10 @@ export function createAvatar({ T, stage, seat }) {
     const WEEKEND = [[0, 'sleep', 'Asleep — it is the weekend'], [H(8, 30), 'wake'], [H(9), 'evening'], [H(23, 15), 'sleep', 'Asleep — it is the weekend']];
     function modeNow() { const c = ownerClock(), tbl = c.weekend ? WEEKEND : WEEKDAY; let cur = tbl[0]; for (const row of tbl) if (c.mins >= row[0]) cur = row; return { mode: cur[1], note: cur[2] || '' }; }
     const stable = () => ['sit', 'type', 'stand', 'inbed', 'away'].includes(state);
-    function goHome() { if (curMode === 'work') goType(); else if (curMode === 'sleep') goBed(); else if (curMode === 'away') goAway(awayNote); else goSit(() => faceYaw(YAW_OUT)); }
+    function goHome() { if (djOn && SPOTS.dj) walkTo('dj'); else if (curMode === 'work') goType(); else if (curMode === 'sleep') goBed(); else if (curMode === 'away') goAway(awayNote); else goSit(() => faceYaw(YAW_OUT)); }
     function enterMode(m) {
       awayNote = m.note;
+      if (djOn && SPOTS.dj) { if (where !== 'dj') walkTo('dj'); return; }   // the music is on: the decks win over the daily routine
       if (m.mode === 'sleep' || m.mode === 'away') takeOffNow();
       if (m.mode === 'sleep') goBed();
       else if (m.mode === 'away') goAway(m.note);
