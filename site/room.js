@@ -673,7 +673,8 @@ function drawGoku(ctx, glowOnly) {
     const pad = 24; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(img.width, x1 + pad); y1 = Math.min(img.height, y1 + pad);
     const cc = cvs(x1 - x0, y1 - y0); cc.getContext('2d').drawImage(kc, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
     const ptx = new T.CanvasTexture(cc); ptx.colorSpace = T.SRGBColorSpace; ptx.anisotropy = 8;
-    const a = cc.width / cc.height, h = GH_, w = h * a;
+    /* designer-preview size: ~0.57 x 0.78 m, filling the wall between the monitor top (1.48) and the ceiling */
+    const a = cc.width / cc.height, h = 0.78, w = h * a; goku.position.y = 1.9;
     tubes.geometry.dispose(); tubes.geometry = new T.PlaneGeometry(w, h);
     halo.geometry.dispose(); halo.geometry = new T.PlaneGeometry(w * 1.12, h * 1.12);
     tubes.material.map = ptx; tubes.material.needsUpdate = true;
