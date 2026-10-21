@@ -11,6 +11,9 @@ const { digest } = require('./_digest.js');
 
 const MODELS = (process.env.OPENAI_MODEL ? [process.env.OPENAI_MODEL] : []).concat(['gpt-4.1-mini', 'gpt-4o-mini', 'gpt-5-mini']);
 const ACTIONS = ['wave', 'nod', 'no', 'think', 'thumbs', 'laugh', 'shrug', 'drink', 'stretch'];
+/* the room's closet (mirrors JACKETS in room.js); the client only ever sends a key, never free text */
+const JACKETS = { denim: "Levi's Type III Sherpa Trucker (blue denim, sherpa collar)", olive: "Levi's Sherpa Trucker in dark olive", suede_brown: 'Zara suede relaxed-fit jacket (brown)', bomber_taupe: 'suede bomber in taupe' };
+const MUSIC_OPS = ['play', 'stop', 'next'];
 
 const TOOLS = [
   { type: 'function', function: {
@@ -28,7 +31,31 @@ const TOOLS = [
     name: 'avatar_action',
     description: 'Make the 3D avatar perform a short gesture while you speak.',
     parameters: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ACTIONS } } } } },
+  { type: 'function', function: {
+    name: 'room_music',
+    description: 'Control the DJ booth in your room. play = walk to the decks and start an auto-mixed set (the songs the visitor loaded, or your demo house grooves); next = mix into the next track; stop = stop the music.',
+    parameters: { type: 'object', required: ['op'], properties: { op: { type: 'string', enum: MUSIC_OPS } } } } },
+  { type: 'function', function: {
+    name: 'wear_jacket',
+    description: 'Walk to the closet and put on one of your jackets, or take the current one off with "off".',
+    parameters: { type: 'object', required: ['jacket'], properties: { jacket: { type: 'string', enum: [...Object.keys(JACKETS), 'off'] } } } } },
 ];
+
+/* live state of the 3D room, sent by the page. Only known keys and plain numbers/booleans get through. */
+function roomText(room) {
+  room = room && typeof room === 'object' ? room : {};
+  const wearing = JACKETS[room.wearing] || null, m = room.music && typeof room.music === 'object' ? room.music : {};
+  const tracks = Math.max(0, Math.min(500, parseInt(m.tracks, 10) || 0)), own = !!m.own;
+  return `# Your room (live; this chat is inside a 3D model of it)
+You are the avatar standing in this room, so room things are part of the conversation, not off-topic. Answer them in your own voice, then carry on.
+- Wearing right now: ${wearing ? 'your ' + wearing : 'no jacket, just the white tank top'}.
+- Closet (front-left; the visitor can click it or ask you): ${Object.values(JACKETS).join('; ')}. To put one on or take it off, call wear_jacket.
+- DJ booth in the front-right corner: a Pioneer DDJ-FLX4 controller with Pioneer DM-40D-BT speakers. Music is ${m.playing ? 'playing now' : 'off'}; ${tracks ? tracks + (own ? ' songs the visitor loaded' : ' demo grooves') + ' in the crate' : 'no songs loaded yet, so you would play your own demo house grooves'}. If they ask for music, call room_music with play and say you are heading to the decks. Their own songs go in through the DJ booth button (Add songs). You cannot pick a specific song by name.`;
+}
+
+/* belt and braces for voice: clear music requests still work if the model forgets the tool */
+const MUSIC_PLAY = /\b(play|put on|start|spin|bajao|baja|chala(o|do)?|laga(o|do)?)\b[^.?!]{0,40}\b(music|songs?|tunes?|beats?|mix|gaan[ae])\b|\b(music|gaan[ae])\b[^.?!]{0,20}\b(bajao|chala(o|do)?|laga(o|do)?)\b/i;
+const MUSIC_STOP = /\b(stop|pause|kill|turn off|band karo|band kar)\b[^.?!]{0,20}\b(music|songs?|gaan[ae])\b/i;
 
 /* read the digest through our own CDN-cached endpoint (shared across instances; this function's memory is not) */
 async function digestText(host) {
@@ -42,7 +69,7 @@ ${d.text}` : '';
   } catch (e) { return ''; }
 }
 
-async function systemPrompt(jobTokens, voice, role, unlocked, host) {
+async function systemPrompt(jobTokens, voice, role, unlocked, host, room) {
   const { persona, skills } = readSkills();                      // desk rules + executable playbooks that ship with the site (public-safe)
   const jobs = (jobTokens || []).map(verifyJob).filter(Boolean).slice(-5).map(j => { const s = jobStatus(j); return `- ${s.id} (${s.skill}): ${s.stageLabel}${s.done ? ' — outputs: ' + JSON.stringify(s.outputs) : ''}`; });
   /* private brain: who Sid is + the skills this caller is allowed to hear; owner also gets his live portfolio */
@@ -64,6 +91,7 @@ General knowledge (how markets, crypto, stocks, trading strategies work), news a
     '# Things this desk can execute\n' + (skills.map(s => `## ${s.name}\n${s.text}`).join('\n\n') || '(none loaded)'),
     ownerText,
     await digestText(host),
+    roomText(room),
     `# System context\nmode: ${MODE}\ncaller: ${role}\ndate: ${new Date().toISOString().slice(0, 10)}\nvisitor tickets:\n${jobs.join('\n') || '- none yet'}`,
     voice ? '# Voice conversation\nThe visitor is talking to you out loud and your reply will be spoken in your voice. Answer the way you would say it across a desk: one or two short sentences, contractions, no lists, no emoji, no symbols or markdown, numbers the way people say them. Their words come from speech recognition, so forgive small transcription mistakes and ask if something is unclear.' : '',
   ].filter(Boolean).join('\n\n');
@@ -107,8 +135,8 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role, role === 'owner' && sessionOk(body.session), req.headers.host) }, ...history];
-  const actions = []; let job = null, reply = '';
+  const messages = [{ role: 'system', content: await systemPrompt(body.jobs, !!body.voice, role, role === 'owner' && sessionOk(body.session), req.headers.host, body.room) }, ...history];
+  const actions = [], roomActs = []; let job = null, reply = '';
   try {
     for (let round = 0; round < 4; round++) {
       const msg = await callOpenAI(messages);
@@ -123,6 +151,13 @@ module.exports = async (req, res) => {
         } else if (tc.function.name === 'avatar_action') {
           if (ACTIONS.includes(args.action)) actions.push(args.action);
           result = { ok: true };
+        } else if (tc.function.name === 'room_music') {
+          if (MUSIC_OPS.includes(args.op) && !roomActs.some(a => a.type === 'music')) roomActs.push({ type: 'music', op: args.op });
+          result = { ok: true, note: 'the page runs this right after your reply' };
+        } else if (tc.function.name === 'wear_jacket') {
+          const ok = args.jacket === 'off' || !!JACKETS[args.jacket];
+          if (ok && !roomActs.some(a => a.type === 'jacket')) roomActs.push({ type: 'jacket', key: args.jacket });
+          result = ok ? { ok: true } : { ok: false, errors: ['unknown jacket'] };
         } else if (tc.function.name === 'submit_request') {
           const validate = VALIDATORS[args.skill];
           if (!validate) result = { ok: false, errors: ['unknown skill'] };
@@ -139,7 +174,11 @@ module.exports = async (req, res) => {
     /* belt and braces: if the locked owner is being asked for his passphrase, make sure the client captures the next
        message as the passphrase (so it never reaches this model) even if the model forgot to call the tool */
     if (role === 'owner' && !sessionOk(body.session) && /pass\s?phrase/i.test(reply) && !actions.includes('ask_passphrase')) actions.push('ask_passphrase');
-    res.status(200).json({ reply: reply || (job ? `Ticket ${job.status.id} is open — I'm on it.` : '…'), actions, job, mode: MODE, role });
+    if (!roomActs.some(a => a.type === 'music')) {
+      if (MUSIC_STOP.test(lastUser)) roomActs.push({ type: 'music', op: 'stop' });
+      else if (MUSIC_PLAY.test(lastUser)) roomActs.push({ type: 'music', op: 'play' });
+    }
+    res.status(200).json({ reply: reply || (job ? `Ticket ${job.status.id} is open — I'm on it.` : '…'), actions, room: roomActs, job, mode: MODE, role });
   } catch (e) {
     res.status(502).json({ error: String(e.message || e).slice(0, 200) });
   }
