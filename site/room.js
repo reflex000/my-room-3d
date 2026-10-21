@@ -587,6 +587,7 @@ avatar.setChair(chair);
 window.__avatar = avatar;
 /* SRE desk: chat with the avatar, job log on the main monitor, ops board on the wall (sre.js) */
 import('./sre.js').then(m => { m.initSRE({ T, stage, avatar, screens }); backlightBoard(); }).catch(e => console.warn('sre desk failed to load', e));
+import('./dj.js').then(m => m.initDJ({ avatar })).catch(e => console.warn('dj booth failed to load', e));
 /* bathroom-mirror style backlight for the ops board: stand it 4 cm off the wall, hide sre.js's round glow,
    add a soft rounded-rect halo on the wall + a thin LED edge behind the bezel. The bake adds the real wall light. */
 function backlightBoard() {
@@ -914,6 +915,8 @@ const LINKS = [
   { test: n => n === 'sre_tickets_link', label: 'SRE tickets — open the SRE desk', action: () => window.__sre && window.__sre.open() },
   { test: n => n.startsWith('tickets_board'), label: "Sid's board — open the market desk", url: '/desk' },
   { test: n => n.startsWith('avatar'), label: "That's me 👋 — click to talk", action: () => (window.__sre ? window.__sre.open() : avatar.command('hi')) },
+  { test: n => /^dj_(flx4|jog|fader|xfader)/.test(n), label: 'Pioneer DJ DDJ-FLX4 — view product', url: 'https://www.pioneerdj.com/en/product/controller/ddj-flx4/graphite/overview/' },
+  { test: n => /^dj_(dm40|spk)/.test(n), label: 'Pioneer DJ DM-40D-BT — view product', url: 'https://www.pioneerdj.com/en/product/monitor-speakers/dm-40d-bt/black/overview/' },
   ...JACKETS.map(j => ({ test: n => n.startsWith('jacket_' + j.key), label: 'Try it on — ' + j.label, action: () => window.__tryOnJacket(j.key) })),
   ...[0, 1, 2].map(i => ({ test: n => n.startsWith('closet_drawer_' + (i + 1)), label: 'Open / close the drawer', action: () => window.__toggleDrawer(i) })),
   { test: n => n.startsWith('closet'), label: 'Click to open / close the closet', action: () => window.__toggleCloset() },
@@ -992,7 +995,7 @@ const outside = [cityView, room.getObjectByName('window_backing')];
 outside.forEach(o => room.remove(o));
 stage.setObject(room);
 outside.forEach(o => room.add(o));
-const frame = () => { stage._camera.position.set(4.1, 3.1, 5.5); stage._controls.target.set(0.3, 1.0, 0.2); stage._controls.update(); };
+const frame = () => { stage._camera.position.set(4.7, 3.5, 6.5); stage._controls.target.set(0.45, 0.95, 0.75); stage._controls.update(); };   // pulled back for the 1.3 m DJ-corner extension at the front
 frame();
 
 /* ---- Blender drop-in: put a baked room.glb in this folder and it replaces the primitive room ---- */
@@ -1192,6 +1195,22 @@ try {
       dg.scene.name = 'desk_hd'; baked.add(dg.scene); window.__deskHdFile = file;
     }, undefined, () => onFail && onFail());
     loadDeskHd('desk-hd-v3.glb', () => loadDeskHd('desk-hd-v2.glb', () => loadDeskHd('desk-hd-v1.glb')));
+    /* DJ corner + 1.3 m front extension (Blender step2c, baked separately). Jogs / faders / speaker cones are separate
+       objects so code can move them: window.__dj (contract in blender/README_DJ.md); dj.js animates them while music plays. */
+    loader.load('./dj-corner-v1.glb', (dj) => {
+      dj.scene.traverse(o => {
+        if (!o.isMesh) return;
+        const src = Array.isArray(o.material) ? o.material[0] : o.material, map = src && (src.map || src.emissiveMap);
+        if (map) { map.colorSpace = T.SRGBColorSpace; map.anisotropy = 8; map.flipY = false; }
+        o.material = new T.MeshStandardMaterial({ name: o.name + '_baked', map, color: map ? 0xffffff : 0x222222, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.28, roughness: 1, metalness: 0 });
+        o.castShadow = !o.name.startsWith('dj_ext'); o.receiveShadow = true;
+      });
+      dj.scene.name = 'dj_corner'; baked.add(dj.scene);
+      const djGlow = new T.PointLight(0xff7a2a, 1.4, 2.6, 2); djGlow.name = 'dj_glow'; djGlow.position.set(1.85, 0.55, 2.95); baked.add(djGlow);
+      const g = (n) => { const o = dj.scene.getObjectByName(n); if (o) { o.userData.restPos = o.position.clone(); o.userData.restQuat = o.quaternion.clone(); } return o; };
+      window.__dj = { jogL: g('dj_jog_l'), jogR: g('dj_jog_r'), fader1: g('dj_fader_1'), fader2: g('dj_fader_2'), xfader: g('dj_xfader'),
+        coneL: g('dj_spk_l_cone'), coneR: g('dj_spk_r_cone'), light: djGlow, stand: { x: 1.61, z: 2.95, rotY: Math.PI / 2 } };
+    }, undefined, () => {});
     frame();
     baked.updateMatrixWorld(true);
   };
