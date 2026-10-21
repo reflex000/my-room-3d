@@ -611,6 +611,86 @@ function backlightBoard() {
   });
 }
 
+/* ============ Goku light-up sign on the back wall, above the main monitor ============
+   Sid's TEKNOFUN DBZ lamp, drawn as our own neon line art (orange hair, purple body) on a clear acrylic sheet.
+   Live, never baked: a tube layer + an additive glow on the wall + one warm point light. */
+const goku = new T.Group(); goku.name = 'neon_goku';
+const GW = 0.46, GH_ = 0.6, gokuPaths = {
+  hair: 'M205 345 L130 330 L180 292 L80 250 L178 240 L110 140 L228 196 L232 70 L296 172 L372 52 L368 178 L478 110 L420 226 L525 232 L428 282 L498 336 L398 338 L388 300 L372 362 L348 300 L318 340 L300 296 L268 372 L258 300 L232 350 L226 304 Z',
+  hairIn: 'M190 270 L240 262 M250 200 L282 236 M344 180 L338 236 M420 262 L380 276',
+  face: 'M212 336 Q214 436 300 474 Q386 436 392 336 M208 362 Q192 380 212 398 M396 362 Q412 380 392 398',
+  eyes: 'M236 372 L282 388 M364 372 L318 388 M246 402 L280 405 M358 402 L324 405 M300 416 L295 430 M284 448 Q302 454 318 444',
+  gi: 'M268 472 L266 504 L160 532 Q108 548 100 620 L96 716 M334 472 L336 504 L442 532 Q494 548 502 620 L506 716 M266 504 L300 604 L336 504 M248 518 L300 640 L354 518 M152 550 L162 716 M450 550 L440 716 M170 688 Q300 710 432 688',
+};
+function drawGoku(ctx, glowOnly) {
+  ctx.lineCap = ctx.lineJoin = 'round';
+  const tube = (d, col, core) => {
+    const p = new Path2D(d);
+    ctx.shadowColor = col; ctx.strokeStyle = col;
+    if (glowOnly) { ctx.shadowBlur = 60; ctx.lineWidth = 34; ctx.stroke(p); ctx.shadowBlur = 30; ctx.lineWidth = 18; ctx.stroke(p); return; }
+    ctx.shadowBlur = 26; ctx.lineWidth = 13; ctx.stroke(p);
+    ctx.shadowBlur = 8; ctx.lineWidth = 7; ctx.stroke(p);
+    ctx.shadowBlur = 0; ctx.strokeStyle = core; ctx.lineWidth = 3; ctx.stroke(p);
+  };
+  if (!glowOnly) { ctx.fillStyle = 'rgba(255,140,40,0.24)'; ctx.fill(new Path2D(gokuPaths.hair)); }
+  tube(gokuPaths.hair, '#ff8a1f', '#fff1d6');
+  tube(gokuPaths.hairIn, '#ff9a30', '#ffe2b8');
+  tube(gokuPaths.face, '#b25cff', '#f1e2ff');
+  tube(gokuPaths.eyes, '#b25cff', '#f1e2ff');
+  tube(gokuPaths.gi, '#9a4dff', '#e8d6ff');
+}
+{
+  const tc = cvs(600, 780), tx = tc.getContext('2d'); drawGoku(tx, false);
+  const ttex = new T.CanvasTexture(tc); ttex.colorSpace = T.SRGBColorSpace; ttex.anisotropy = 4;
+  const gc = cvs(300, 390), gx = gc.getContext('2d'); gx.translate(300 * (1 - 1 / 1.35) / 2, 390 * (1 - 1 / 1.35) / 2); gx.scale(0.5 / 1.35, 0.5 / 1.35);   // halo plane is 1.35x the tubes drawGoku(gx, true);
+  const gtex = new T.CanvasTexture(gc); gtex.colorSpace = T.SRGBColorSpace;
+  /* clear acrylic sheet on 4 brushed standoffs, tubes just in front of it */
+  const acrylic = new T.MeshPhysicalMaterial({ name: 'neon_goku_acrylic', color: 0xffffff, roughness: 0.08, transmission: 0.9, thickness: 0.006, transparent: true, opacity: 0.07, depthWrite: false });
+  rbox('neon_goku_sheet', GW + 0.06, GH_ + 0.06, 0.006, 0.02, acrylic, 0, 0, 0, goku).castShadow = false;
+  const steel = new T.MeshStandardMaterial({ name: 'neon_goku_standoff', color: 0xcfd3d8, metalness: 0.9, roughness: 0.3 });
+  [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(([sx, sy], i) => {
+    const s = cyl('neon_goku_standoff_' + (i + 1), 0.009, 0.009, 0.022, steel, sx * (GW / 2 + 0.01), sy * (GH_ / 2 + 0.01), -0.006, goku, 14);
+    s.rotation.x = Math.PI / 2;
+  });
+  const tubes = add('neon_goku_panel', new T.Mesh(new T.PlaneGeometry(GW, GH_), new T.MeshBasicMaterial({ map: ttex, transparent: true, depthWrite: false, toneMapped: false })), 0, 0, 0.005, goku);
+  tubes.castShadow = false;
+  const halo = add('neon_goku_glow', new T.Mesh(new T.PlaneGeometry(GW * 1.35, GH_ * 1.35), new T.MeshBasicMaterial({ map: gtex, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false, opacity: 0.55 })), 0, 0, -0.016, goku);
+  halo.castShadow = false; halo.raycast = () => {};
+  const glow = new T.PointLight(0xff9440, 0.8, 1.9, 2); glow.name = 'neon_goku_light'; glow.position.set(0, 0.05, 0.45); goku.add(glow);
+  goku.userData = { tubes: tubes.material, halo: halo.material, light: glow, haloMax: 0.55 };
+  /* the real lamp photo replaces the line art when goku-neon.jpg is in the site.
+     Its dark backdrop is keyed out to alpha (brightness ramp) so the sign reads on the pink wall instead of washing out. */
+  new T.ImageLoader().load('./goku-neon.jpg', (img) => {
+    const kc = cvs(img.width, img.height), kx = kc.getContext('2d'); kx.drawImage(img, 0, 0);
+    const px = kx.getImageData(0, 0, img.width, img.height), d = px.data;
+    let x0 = img.width, y0 = img.height, x1 = 0, y1 = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const m = Math.max(d[i], d[i + 1], d[i + 2]), al = Math.max(0, Math.min(255, (m - 45) * 4)); d[i + 3] = al;
+      if (al > 40) { const p = i / 4, x = p % img.width, y = (p - x) / img.width; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    kx.putImageData(px, 0, 0);
+    /* crop to the lit sign (+ a little room for its glow) so it fills the plane */
+    const pad = 24; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(img.width, x1 + pad); y1 = Math.min(img.height, y1 + pad);
+    const cc = cvs(x1 - x0, y1 - y0); cc.getContext('2d').drawImage(kc, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+    const ptx = new T.CanvasTexture(cc); ptx.colorSpace = T.SRGBColorSpace; ptx.anisotropy = 8;
+    const a = cc.width / cc.height, h = GH_, w = h * a;
+    tubes.geometry.dispose(); tubes.geometry = new T.PlaneGeometry(w, h);
+    halo.geometry.dispose(); halo.geometry = new T.PlaneGeometry(w * 1.12, h * 1.12);
+    tubes.material.map = ptx; tubes.material.needsUpdate = true;
+    Object.assign(halo.material, { map: ptx }); halo.material.needsUpdate = true; goku.userData.haloMax = 0.25;   // the photo already carries its glow
+    /* the lamp has its own acrylic edge in the photo: drop our sheet and standoffs */
+    goku.children.filter(c => c.name === 'neon_goku_sheet' || c.name.startsWith('neon_goku_standoff')).forEach(c => { c.visible = false; });
+  }, undefined, () => {});
+  goku.position.set(0.5, 1.93, -HW + TH + 0.024);
+  room.add(goku);
+}
+/* plug-in flicker once on load, then a slow neon breath */
+function gokuTick(t) {
+  const u = goku.userData, on = t < 1.6 ? ([0.25, 0.4, 0.7, 0.85, 1.1, 1.25].filter(k => t > k).length % 2 ? 0.15 : 1) * Math.min(1, t * 3) : 1;
+  const b = on * (0.94 + 0.06 * Math.sin(t * 1.7));
+  u.tubes.opacity = 0.35 + 0.65 * b; u.halo.opacity = u.haloMax * b; u.light.intensity = 0.8 * b;
+}
+
 /* ============ loft bed (white tube frame, grey fabric guard) ============ */
 const bed = new T.Group(); bed.name = 'loft_bed';
 const BW = 0.95, BL = 2.0, BH = 1.45, GH = 0.5;
@@ -909,6 +989,7 @@ stage._controls.autoRotateSpeed = 0.7;
 
 /* ============ hover links + curtain click ============ */
 const LINKS = [
+  { test: n => n.startsWith('neon_goku'), label: 'Goku light-up sign — view on Amazon', url: 'https://www.amazon.ca/TEKNOFUN-Dragon-Light-Up-Illumination-811415/dp/B08QSD6HFQ' },
   { test: n => n.startsWith('monitor_main') || n === 'screen_main', label: 'LG 32" Smart Monitor — view product', url: 'https://www.lg.com/ca_en/monitors/smart-monitors/32u720sa-w/' },
   { test: n => n.startsWith('laptop_hp'), label: 'HP Elite x360 1040 G11 — view product', url: 'https://www.hp.com/us-en/shop/pdp/hp-elite-x360-1040-14-inch-g11-2-in-1-notebook-pc-wolf-pro-security-edition-p-cp3m0ua-aba-1' },
   { test: n => n.startsWith('loft_bed') || n.startsWith('bed_') || n.startsWith('ladder_'), label: 'IKEA VITVAL Loft Bed — view product', url: 'https://www.ikea.com/ca/en/p/vitval-loft-bed-frame-white-light-gray-70411239/' },
@@ -979,6 +1060,7 @@ const t0 = performance.now();
   /* curtains slide toward the frame edges */
   curtain.open += (curtain.target - curtain.open) * 0.06;
   closetTick();
+  gokuTick(t);
   [curtainL, curtainR].forEach(g => {
     const pleats = g.children[0];
     pleats.children.forEach((p, i) => { p.position.z = p.userData.baseZ * (1 - curtain.open * 0.82); p.scale.x = 1 + curtain.open * 0.5; });
@@ -1132,6 +1214,7 @@ try {
     /* bakes made before the plush existed (v3): carry the live primitive plush across */
     if (!isV4) { const hp = room.getObjectByName('homer_plush'); if (hp) baked.add(hp); }   // v4 has the plush baked into desk_items
     baked.add(closet);   // closet is live (doors move), never baked
+    baked.add(goku);     // neon sign is live too (flicker + glow)
     /* v3: the removed jacket left its baked shadow on the grey guard panel (z -0.37..-0.73). Cover that panel half with a
        patch whose colours are sampled from a clean column of the same baked texture (z = -1.0), so it blends in. */
     if (!isV4) setTimeout(() => {
