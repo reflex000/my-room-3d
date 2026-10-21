@@ -587,6 +587,7 @@ avatar.setChair(chair);
 window.__avatar = avatar;
 /* SRE desk: chat with the avatar, job log on the main monitor, ops board on the wall (sre.js) */
 import('./sre.js').then(m => { m.initSRE({ T, stage, avatar, screens }); backlightBoard(); }).catch(e => console.warn('sre desk failed to load', e));
+import('./dj.js').then(m => m.initDJ({ avatar })).catch(e => console.warn('dj booth failed to load', e));
 /* bathroom-mirror style backlight for the ops board: stand it 4 cm off the wall, hide sre.js's round glow,
    add a soft rounded-rect halo on the wall + a thin LED edge behind the bezel. The bake adds the real wall light. */
 function backlightBoard() {

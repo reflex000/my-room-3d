@@ -235,7 +235,7 @@ export function createAvatar({ T, stage, seat }) {
     /* states: type | sit | walk | stand | standing_up | sitting_down | swivel | climb_in | climb | climb_down | climb_end | to_bed | inbed | from_bed */
     let state = 'type', transT = 0, path = [], faceAfter = 0, onArrive = null, where = 'seat';
     let gesture = null, gStart = 0, gW = 0, last = nowS(), nextBlink = 2, nextAuto = nowS() + 20;
-    let voiceOn = false, voiceLevel = 0;
+    let voiceOn = false, voiceLevel = 0, grooveSrc = null;
     let conversing = false, nextHuman = 0, standUntil = 0, holdUntil = 0, curMode = null, awayNote = '', fade = 1, fadeTarget = 1;
     let tossActive = false, tossQueue = 0, tossUntil = 0, tossReleased = false, tossWaiting = false; const balls = [], score = { made: 0, tried: 0 };
     let chairYaw = YAW_DESK, chairYawTarget = YAW_DESK, chairSlide = DESK_SLIDE, chairSlideTarget = DESK_SLIDE, swivelThen = null;
@@ -604,6 +604,15 @@ export function createAvatar({ T, stage, seat }) {
         model.position.y = Math.max(0, TOE_FLOOR - low(bones.LeftToeBase, bones.RightToeBase), ANKLE_FLOOR - low(bones.LeftFoot, bones.RightFoot));
       }
 
+      /* --- music: a nod on every beat (dj.js hands over { amp, phase } where phase 0 = on the beat) --- */
+      const gv = grooveSrc && grooveSrc();
+      if (gv && gv.amp > 0.01 && state !== 'inbed' && state !== 'away') {
+        const nod = gv.amp * (0.22 * Math.exp(-7 * gv.phase) - 0.04);   // ~10° dip on the beat
+        bones.Neck.quaternion.multiply(localFor('Neck', Q(nod * 0.55, 0, 0), tq).multiply(rest.Neck.R.clone().invert()));
+        bones.Head.quaternion.multiply(localFor('Head', Q(nod * 0.45, 0, 0), tq).multiply(rest.Head.R.clone().invert()));
+        if (bones.Spine2) bones.Spine2.quaternion.multiply(localFor('Spine2', Q(nod * 0.12, 0, 0), tq).multiply(rest.Spine2.R.clone().invert()));
+      }
+
       /* --- face --- */
       if (now > nextBlink) nextBlink = now + 2.2 + Math.random() * 3.5;
       const blinking = nextBlink - now < 0.13 ? 1 : 0;
@@ -693,6 +702,7 @@ export function createAvatar({ T, stage, seat }) {
     api.play = play; api.say = say; api.bones = bones; api.rig = rig; api.walkTo = walkTo; api.sit = goSit; api.type = goType; api.bed = goBed; api.up = ensureStanding;
     api.state = () => ({ state, where, base: base && base.getClip().name, chairYaw: +chairYaw.toFixed(2), wearing: wearing && wearing.key });
     api.tryOn = tryOn; api.takeOff = takeOff;
+    api.groove = (fn) => { grooveSrc = typeof fn === 'function' ? fn : null; };
     api._dbg = { clips, sampler, mixer, setBase, rest, actions };
     api.debugClip = (name, opts) => { state = 'stand'; rig.position.set(0.35, 0, 1.1); rig.rotation.set(0, 0.15, 0); setBase(name, opts || {}); };
     api.ready = true;
