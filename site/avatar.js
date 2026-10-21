@@ -128,6 +128,14 @@ export function createAvatar({ T, stage, seat }) {
       else dq.copy(eq);
       return localFor(n, dq, out);
     }
+    /* beat phase for the DJ moves (0 = on the beat); a steady 120 BPM when no music is driving it */
+    const beatPh = () => { const g = grooveSrc && grooveSrc(); return g ? g.phase : (nowS() * 2) % 1; };
+    const HYPE = {
+      handsUp: ['Hands up! 🙌', 'Put your hands in the air!', 'Here we go!'],
+      fistPump: ['Let’s gooo! 🔥', 'Feel that bass?', 'Louder!'],
+      point: ['This one’s for you 👉', 'Vancouver, you with me?'],
+      clapHigh: ['Clap it up! 👏', 'Make some noise!'],
+    };
     const JOINT = { torso: 'Spine1', head: 'Head', neck: 'Neck', shL: 'LeftArm', shR: 'RightArm', elL: 'LeftForeArm', elR: 'RightForeArm' };
     /* gestures: either a mocap clip sampled on the upper body, or a procedural pose */
     const GESTURES = {
@@ -138,6 +146,10 @@ export function createAvatar({ T, stage, seat }) {
       phone:   { clip: 'phone', dur: 8, prop: 'phone', from: 1.5 },
       laugh:   { clip: 'sitLaugh', dur: 4.5, look: 1, face: 'laugh' },
       thumbs:  { look: 1, dur: 2.6, face: 'smile', pose: (t) => ({ shL: [-1.1, 0, -0.1], elL: [-1.35, 0, 0], head: [0.04 + S(t * 6) * 0.04, 0, 0.06] }) },
+      handsUp:  { dur: 4.2, face: 'smile', pose: (t) => { const sw = S(t * 3.4) * 0.16; return { shL: [-2.7, 0, 0.25 + sw], shR: [-2.7, 0, -0.25 + sw], elL: [-0.3, 0, 0], elR: [-0.3, 0, 0], head: [-0.16, 0, 0], torso: [-0.05, 0, 0] }; } },
+      fistPump: { dur: 4.0, face: 'smile', look: 1, pose: () => { const b = Math.exp(-6 * beatPh()); return { shR: [-2.35 - 0.3 * b, 0, -0.05], elR: [-1.25 + 0.85 * b, 0, 0], head: [0.05 - 0.12 * b, 0, 0] }; } },
+      point:    { dur: 2.8, face: 'smile', look: 1, pose: () => ({ shR: [-1.75, 0, 0.22], elR: [-0.08, 0, 0], torso: [0.04, 0, 0] }) },
+      clapHigh: { dur: 3.6, face: 'smile', pose: () => { const c = Math.exp(-7 * beatPh()); return { shL: [-2.45, 0, -0.1 - 0.3 * c], shR: [-2.45, 0, 0.1 + 0.3 * c], elL: [-0.95, 0, 0], elR: [-0.95, 0, 0], head: [-0.08, 0, 0] }; } },
       reach:   { dur: 1.5, pose: () => ({ shR: [-1.3, 0, 0.2], elR: [-0.45, 0, 0], torso: [0.1, 0, 0], head: [0.15, 0, 0] }) },
       think:   { look: 1, dur: 4.5, face: 'brow', pose: (t) => ({ shR: [-0.8, 0, 0.95], elR: [-2.1, 0, 0], head: [0.12, -0.18, -0.1 + S(t * 1.2) * 0.03] }) },
       nod:     { look: 1, dur: 1.8, face: 'smile', pose: (t) => ({ head: [0.1 + S(t * 9) * 0.18, 0, 0] }) },
@@ -235,7 +247,7 @@ export function createAvatar({ T, stage, seat }) {
     /* states: type | sit | walk | stand | standing_up | sitting_down | swivel | climb_in | climb | climb_down | climb_end | to_bed | inbed | from_bed */
     let state = 'type', transT = 0, path = [], faceAfter = 0, onArrive = null, where = 'seat';
     let gesture = null, gStart = 0, gW = 0, last = nowS(), nextBlink = 2, nextAuto = nowS() + 20;
-    let voiceOn = false, voiceLevel = 0, grooveSrc = null, djOn = false, djW = 0;
+    let voiceOn = false, voiceLevel = 0, grooveSrc = null, djOn = false, djW = 0, nextHype = 0;
     let conversing = false, nextHuman = 0, standUntil = 0, holdUntil = 0, curMode = null, awayNote = '', fade = 1, fadeTarget = 1;
     let tossActive = false, tossQueue = 0, tossUntil = 0, tossReleased = false, tossWaiting = false; const balls = [], score = { made: 0, tried: 0 };
     let chairYaw = YAW_DESK, chairYawTarget = YAW_DESK, chairSlide = DESK_SLIDE, chairSlideTarget = DESK_SLIDE, swivelThen = null;
@@ -569,6 +581,18 @@ export function createAvatar({ T, stage, seat }) {
         model.visible = fade > 0.01;
       }
 
+      /* --- DJ pose: hands on the controller (1.06 m high, ~0.45 m in front), left hand working the jog, right on the mixer when mixing.
+         Applied before the gesture layer so DJ moves (hands up, fist pump…) blend out of it and back. --- */
+      const djTarget = djOn && where === 'dj' && state === 'stand' && !(gesture && gesture.full) ? 1 : 0;
+      djW += (djTarget - djW) * (1 - Math.exp(-dt * 4));
+      if (djW > 0.01) {
+        const gi = grooveSrc && grooveSrc(), mixingNow = !!(gi && gi.mixing), jog = Math.sin(now * 2.3) * 0.06;
+        const p = { torso: [0.12, 0, 0], shL: [-0.85 + jog, 0, 0.15], elL: [-0.45 - jog, 0, 0], shR: [-0.85, 0, mixingNow ? 0.02 : -0.15], elR: [-0.45, 0, 0] };
+        for (const j in p) { const n = JOINT[j]; if (bones[n]) bones[n].quaternion.slerp(targetLocal(n, p[j], tq), djW); }
+        /* now and then a DJ move + a shout to the crowd */
+        if (djW > 0.9 && !gesture && now > nextHype) { nextHype = now + 9 + Math.random() * 12; const m = pickOne(['handsUp', 'fistPump', 'point', 'clapHigh', 'fistPump', 'handsUp']); play(m); say(pickOne(HYPE[m]), 2.8); }
+      }
+
       /* --- gesture layer --- */
       let faceMode = state === 'inbed' || state === 'to_bed' ? 'closed' : 'neutral', look = 0;
       if (gesture) {
@@ -610,15 +634,6 @@ export function createAvatar({ T, stage, seat }) {
 
         const low = (a, b) => Math.min(root.worldToLocal(a.getWorldPosition(tmpV)).y, root.worldToLocal(b.getWorldPosition(tmpV)).y);
         model.position.y = Math.max(0, TOE_FLOOR - low(bones.LeftToeBase, bones.RightToeBase), ANKLE_FLOOR - low(bones.LeftFoot, bones.RightFoot));
-      }
-
-      /* --- DJ pose: hands on the controller (1.06 m high, ~0.45 m in front), left hand working the jog, right on the mixer when mixing --- */
-      const djTarget = djOn && where === 'dj' && state === 'stand' && !gesture ? 1 : 0;
-      djW += (djTarget - djW) * (1 - Math.exp(-dt * 4));
-      if (djW > 0.01) {
-        const gi = grooveSrc && grooveSrc(), mixingNow = !!(gi && gi.mixing), jog = Math.sin(now * 2.3) * 0.06;
-        const p = { torso: [0.12, 0, 0], shL: [-0.85 + jog, 0, 0.15], elL: [-0.45 - jog, 0, 0], shR: [-0.85, 0, mixingNow ? 0.02 : -0.15], elR: [-0.45, 0, 0] };
-        for (const j in p) { const n = JOINT[j]; if (bones[n]) bones[n].quaternion.slerp(targetLocal(n, p[j], tq), djW); }
       }
 
       /* --- music: a nod on every beat (dj.js hands over { amp, phase } where phase 0 = on the beat) --- */
@@ -721,6 +736,7 @@ export function createAvatar({ T, stage, seat }) {
     api.tryOn = tryOn; api.takeOff = takeOff;
     api.groove = (fn) => { grooveSrc = typeof fn === 'function' ? fn : null; };
     api.djStand = djStand;
+    api.hype = (m) => { if (!djOn || where !== 'dj' || state !== 'stand') return; const k = HYPE[m] ? m : 'handsUp'; play(k); say(pickOne(HYPE[k]), 2.8); nextHype = nowS() + 10 + Math.random() * 8; };
     api._dbg = { clips, sampler, mixer, setBase, rest, actions };
     api.debugClip = (name, opts) => { state = 'stand'; rig.position.set(0.35, 0, 1.1); rig.rotation.set(0, 0.15, 0); setBase(name, opts || {}); };
     api.ready = true;
