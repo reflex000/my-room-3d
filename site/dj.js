@@ -227,7 +227,7 @@ export function initDJ({ avatar }) {
     setTimeout(() => { if (playing) b.el.play().catch(() => {}); }, Math.max(0, toBeat * 1000 - 25));
     mixing = { a, b, mid: T + D * 0.5, end: T + D, sync, rate };
     nextIdx = -1; status.textContent = `Mixing into “${tb.title}”${sync ? ` · beat-matched${rate !== 1 ? `, tempo ${rate > 1 ? '+' : ''}${(rate * 100 - 100).toFixed(1)}%` : ''}` : ''}`;
-    if (avatar && avatar.play) avatar.play('reach');
+    if (avatar && avatar.play && !window.__dj) avatar.play('reach');   // at the DJ corner the right hand goes to the mixer instead
   }
   function endMix() {
     const { a, b, rate } = mixing; a.el.pause(); resetEQ(a); a.gain.gain.cancelScheduledValues(ctx.currentTime); a.gain.gain.setValueAtTime(0, ctx.currentTime);
@@ -273,16 +273,39 @@ export function initDJ({ avatar }) {
     if (!playing || !analyser) return null;
     analyser.getByteFrequencyData(level); let lo = 0; for (let i = 1; i < 8; i++) lo += level[i]; lo /= 7 * 255;
     const d = mixing ? (ctx.currentTime > mixing.mid ? mixing.b : mixing.a) : decks[cur];
-    return { amp: Math.min(1, 0.5 + 0.5 * lo), phase: d.track && d.track.bpm ? phaseOf(d) : (performance.now() / 500) % 1 };
+    return { mixing: !!mixing, amp: Math.min(1, 0.5 + 0.5 * lo), phase: d.track && d.track.bpm ? phaseOf(d) : (performance.now() / 500) % 1 };
   }
   function onPlayState() {
     btn.classList.toggle('on', playing);
     if (!avatar) return;
-    if (playing) { if (avatar.hold) avatar.hold(1e7); if (avatar.type) avatar.type(); if (avatar.groove) avatar.groove(groove); if (avatar.say) avatar.say(pickLine(), 3); }
-    else { if (avatar.groove) avatar.groove(null); if (avatar.hold) avatar.hold(4); }
+    const rig = window.__dj;
+    if (playing) { if (avatar.hold) avatar.hold(1e7); if (rig && rig.stand && avatar.djStand) avatar.djStand(rig.stand); else if (avatar.type) avatar.type(); if (avatar.groove) avatar.groove(groove); if (avatar.say) avatar.say(pickLine(), 3); }
+    else { if (avatar.groove) avatar.groove(null); if (avatar.djStand) avatar.djStand(null); if (avatar.hold) avatar.hold(4); }
   }
   const pickLine = () => ['Let’s go 🎧', 'Turning it up 🔊', 'This one’s a vibe'][Math.floor(Math.random() * 3)];
 
-  const api = { addFiles, start, pause, mixNow: () => mixBtn.onclick(), state: () => ({ playing, mixing: !!mixing, cur, nowIdx, nextIdx, tracks: tracks.map(t => ({ title: t.title, bpm: t.bpm, firstBeat: t.firstBeat })) }), _detect: detectTempo, _render: renderGroove, _demos: DEMOS, _debug: () => ({ decks, phaseOf, ctx, mixing }) };
-  window.__dj = api; return api;
+  /* ---------- the DJ corner moves with the music (objects from the designer's dj-corner glb, see blender/README_DJ.md) ---------- */
+  let rigLast = performance.now(); const jogAng = [0, 0], qY = (a) => { rigQ.setFromAxisAngle(rigAxis, a); return rigQ; };
+  let rigQ = null, rigAxis = null, rigV = null;
+  function rigTick(t) {
+    requestAnimationFrame(rigTick);
+    const R = window.__dj, dt = Math.min(0.1, (t - rigLast) / 1000); rigLast = t; if (!R || !R.jogL) return;
+    if (!rigQ) { rigQ = R.jogL.quaternion.clone(); rigAxis = R.jogL.up.clone().set(0, 1, 0); rigV = R.jogL.position.clone(); }
+    const g = groove(), beat = g ? g.amp * Math.exp(-9 * g.phase) : 0;
+    [R.jogL, R.jogR].forEach((jog, i) => {
+      const d = decks[i]; if (!jog) return;
+      if (ctx && playing && !d.el.paused) jogAng[i] -= dt * 2 * Math.PI * 0.555 * d.el.playbackRate;   // 33⅓ rpm platter, clockwise
+      jog.quaternion.copy(jog.userData.restQuat).multiply(qY(jogAng[i]));
+    });
+    const slide = (o, x, y, z) => { if (o) o.position.copy(o.userData.restPos).add(rigV.set(x, y, z).applyQuaternion(o.quaternion)); };
+    const gA = decks[0].gain ? decks[0].gain.gain.value : 0, gB = decks[1].gain ? decks[1].gain.gain.value : 0;
+    slide(R.fader1, 0, 0, (0.5 - (playing ? gA : 0)) * 0.056); slide(R.fader2, 0, 0, (0.5 - (playing ? gB : 0)) * 0.056);   // -Z = up
+    slide(R.xfader, ((gB + 1e-6) / (gA + gB + 2e-6) - 0.5) * 0.052, 0, 0);
+    slide(R.coneL, 0, 0.0028 * beat, 0); slide(R.coneR, 0, 0.0028 * beat, 0);
+    if (R.light) R.light.intensity = playing ? 0.9 + 1.4 * beat : 1.4;
+  }
+  requestAnimationFrame(rigTick);
+
+  const api = { addFiles, start, pause, mixNow: () => mixBtn.onclick(), state: () => ({ playing, mixing: !!mixing, cur, nowIdx, nextIdx, tracks: tracks.map(t => ({ title: t.title, bpm: t.bpm, firstBeat: t.firstBeat })) }), _detect: detectTempo, _render: renderGroove, _demos: DEMOS, _debug: () => ({ decks, phaseOf, ctx, mixing, rigTick }) };
+  window.__djBooth = api; return api;
 }
